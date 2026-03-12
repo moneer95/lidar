@@ -30,7 +30,7 @@ class ScanPlotNode(Node):
 
         # Only show this many degrees (centered on front 0°). 0 = show full 360°
         self.declare_parameter("fov_degrees", 360)
-        fov = self.get_parameter("fov_degrees").get_value_as_int()
+        fov = int(self.get_parameter("fov_degrees").value)
         self.fov_degrees = fov if fov > 0 else 360
         self.half_fov_rad = math.radians(self.fov_degrees / 2.0)
 
