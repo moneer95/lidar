@@ -27,9 +27,11 @@ class ScanPlotNode(Node):
         super().__init__("scan_plot_node")
 
         self.declare_parameter("fov_degrees", 360)
+        self.declare_parameter("max_range_m", 5.0)  # max view distance (zoom in). Increase to see farther.
         fov = int(self.get_parameter("fov_degrees").value)
         self.fov_degrees = fov if fov > 0 else 360
         self.half_fov_rad = math.radians(self.fov_degrees / 2.0)
+        self.max_range_m = float(self.get_parameter("max_range_m").value)
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -92,8 +94,9 @@ class ScanPlotNode(Node):
             self.plt.pause(0.01)
             return
 
-        # Range for axes: use actual data so the map shows real scale
-        lim = max(2.0, min(msg.range_max, 16.0))
+        # Zoom in: limit view to data extent + padding, cap at max_range_m (default 5 m)
+        data_max = max(math.hypot(x, y) for x, y in zip(xs, ys)) if xs else 2.0
+        lim = max(1.0, min(data_max * 1.15, self.max_range_m))
 
         # All points at their real (X, Y) position in meters
         self.ax.scatter(xs, ys, s=6, c="steelblue", alpha=0.85, edgecolors="none")
