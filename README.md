@@ -168,6 +168,14 @@ ros2 run lidar_tools scan_plot_node
 ros2 run lidar_tools scan_plot_node --ros-args -p fov_degrees:=100
 ```
 
+**Limit scan to 1 m only** (only show points within 1 m; good for close-up view):
+
+```bash
+ros2 run lidar_tools scan_plot_node --ros-args -p max_scan_range_m:=1.0
+```
+
+**YDLidar G4 range:** min **0.12 m**, max **16 m**. Scan frequency 5–12 Hz.
+
 Install matplotlib/numpy if needed: `pip3 install matplotlib numpy`
 
 **Plot from an exported CSV (angle_deg, range_m):**

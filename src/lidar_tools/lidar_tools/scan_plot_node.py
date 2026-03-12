@@ -27,11 +27,13 @@ class ScanPlotNode(Node):
         super().__init__("scan_plot_node")
 
         self.declare_parameter("fov_degrees", 360)
-        self.declare_parameter("max_range_m", 5.0)  # max view distance (zoom in). Increase to see farther.
+        self.declare_parameter("max_range_m", 5.0)   # max view distance (zoom). Increase to see farther.
+        self.declare_parameter("max_scan_range_m", 0.0)  # only show points within this distance (m). 0 = no limit. e.g. 1.0 = 1 m
         fov = int(self.get_parameter("fov_degrees").value)
         self.fov_degrees = fov if fov > 0 else 360
         self.half_fov_rad = math.radians(self.fov_degrees / 2.0)
         self.max_range_m = float(self.get_parameter("max_range_m").value)
+        self.max_scan_range_m = float(self.get_parameter("max_scan_range_m").value)
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -47,8 +49,9 @@ class ScanPlotNode(Node):
             qos,
         )
 
+        range_info = f" (scan range limit: {self.max_scan_range_m}m)" if self.max_scan_range_m > 0 else ""
         self.get_logger().info(
-            "Subscribed to /scan. Top-down map (X,Y in meters). Starting..."
+            f"Subscribed to /scan. Top-down map (X,Y in meters).{range_info} Starting..."
         )
         self.setup_plot()
 
@@ -79,6 +82,9 @@ class ScanPlotNode(Node):
                 continue
             if self.fov_degrees < 360 and abs(angle) > self.half_fov_rad:
                 continue
+            # Optional: only show points within max_scan_range_m (e.g. 1.0 = 1 m only)
+            if self.max_scan_range_m > 0 and float(r) > self.max_scan_range_m:
+                continue
             x = float(r) * math.cos(angle)
             y = float(r) * math.sin(angle)
             xs.append(x)
@@ -94,9 +100,9 @@ class ScanPlotNode(Node):
             self.plt.pause(0.01)
             return
 
-        # Zoom in: limit view to data extent + padding, cap at max_range_m (default 5 m)
+        # Zoom: view fits data + padding, cap at max_range_m
         data_max = max(math.hypot(x, y) for x, y in zip(xs, ys)) if xs else 2.0
-        lim = max(1.0, min(data_max * 1.15, self.max_range_m))
+        lim = max(0.5, min(data_max * 1.15, self.max_range_m))
 
         # All points at their real (X, Y) position in meters
         self.ax.scatter(xs, ys, s=6, c="steelblue", alpha=0.85, edgecolors="none")
