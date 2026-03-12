@@ -1,119 +1,142 @@
 #!/usr/bin/env python3
 """
-ROS2 node: subscribe to /scan and draw live graphs (polar plot + optional time series).
-Use with YDLidar G4 driver publishing on /scan.
-Requires: matplotlib, numpy (pip install matplotlib numpy)
+Live LiDAR plot: polar view (angle vs range) + top-down view with distance rings.
+Clear labels and stats so you can understand the scan at a glance.
 """
 
 import math
-from collections import deque
-
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import LaserScan
 
 
+def _draw_distance_rings(ax, r_max, step=1.0):
+    """Draw concentric circles at 1m, 2m, ... and add labels."""
+    import numpy as np
+    for r in np.arange(step, r_max + 0.01, step):
+        theta = np.linspace(0, 2 * math.pi, 100)
+        ax.plot(r * np.cos(theta), r * np.sin(theta), "k-", alpha=0.25, linewidth=0.8)
+    # Label one ring
+    if r_max >= 1.0:
+        ax.text(1.05, 0, "1m", fontsize=8, alpha=0.7)
+    if r_max >= 2.0:
+        ax.text(2.05, 0, "2m", fontsize=8, alpha=0.7)
+
+
 class ScanPlotNode(Node):
-    def __init__(self, history_len=50):
+    def __init__(self):
         super().__init__("scan_plot_node")
-        self.history_len = history_len
-        self._stamps = deque(maxlen=history_len)
-        self._num_points = deque(maxlen=history_len)
-        self._latest_scan = None
+
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+        )
+
+        self.latest_scan = None
 
         self.sub = self.create_subscription(
             LaserScan,
-            "scan",
+            "/scan",
             self.scan_callback,
-            10,
+            qos,
         )
-        self.get_logger().info("Subscribed to /scan. Starting plot (close window to stop).")
 
-        self._setup_plot()
+        self.get_logger().info("Subscribed to /scan. Starting live plot...")
+        self.setup_plot()
 
-    def _setup_plot(self):
-        try:
-            import matplotlib
-            matplotlib.use("TkAgg")
-            import matplotlib.pyplot as plt
-            import numpy as np
-        except ImportError as e:
-            self.get_logger().error(
-                "matplotlib/numpy required for plotting. Install: pip3 install matplotlib numpy"
-            )
-            raise
-
+    def setup_plot(self):
+        import matplotlib
+        matplotlib.use("TkAgg")
+        import matplotlib.pyplot as plt
         self.plt = plt
-        self.np = np
-        self.fig, (self.ax_polar, self.ax_time) = self.plt.subplots(1, 2, figsize=(12, 5))
+        self.fig, (self.ax_polar, self.ax_top) = plt.subplots(1, 2, figsize=(14, 6))
         self.plt.ion()
         self.plt.show()
 
-    def scan_callback(self, msg: LaserScan):
-        stamp = msg.header.stamp
-        t_sec = float(stamp.sec) + 1e-9 * float(stamp.nanosec)
-        self._stamps.append(t_sec)
-        self._num_points.append(len(msg.ranges))
-        self._latest_scan = msg
-        self._redraw()
+    def scan_callback(self, msg):
+        self.latest_scan = msg
+        self.redraw()
 
-    def _redraw(self):
-        if self._latest_scan is None:
-            return
-        try:
-            import numpy as np
-        except ImportError:
+    def redraw(self):
+        if self.latest_scan is None:
             return
 
-        msg = self._latest_scan
-        self.ax_polar.clear()
-        self.ax_time.clear()
+        import numpy as np
+        msg = self.latest_scan
 
-        # Polar: angles and ranges (replace inf/nan with range_max for display)
-        angles = []
+        angles_rad = []
         ranges = []
         for i, r in enumerate(msg.ranges):
             angle = msg.angle_min + i * msg.angle_increment
-            if math.isinf(r) or (r != r):
-                r = msg.range_max
-            else:
-                r = max(msg.range_min, min(float(r), msg.range_max))
-            angles.append(angle)
-            ranges.append(r)
+            if not math.isfinite(r) or r < msg.range_min or r > msg.range_max:
+                continue
+            angles_rad.append(angle)
+            ranges.append(float(r))
 
-        if angles and ranges:
-            angles_np = np.array(angles)
-            ranges_np = np.array(ranges)
-            x = ranges_np * np.cos(angles_np)
-            y = ranges_np * np.sin(angles_np)
-            self.ax_polar.scatter(x, y, s=1, c="blue", alpha=0.6)
-        self.ax_polar.set_xlim(-msg.range_max, msg.range_max)
-        self.ax_polar.set_ylim(-msg.range_max, msg.range_max)
-        self.ax_polar.set_aspect("equal")
-        self.ax_polar.set_title("LaserScan (polar → Cartesian)")
-        self.ax_polar.set_xlabel("x (m)")
-        self.ax_polar.set_ylabel("y (m)")
-        self.ax_polar.grid(True)
+        if not ranges:
+            self.ax_polar.clear()
+            self.ax_top.clear()
+            self.ax_polar.set_title("Polar: Angle vs Range (no valid points)")
+            self.ax_top.set_title("Top-down view (no valid points)")
+            self.plt.draw()
+            self.plt.pause(0.01)
+            return
 
-        # Time series: stamp vs number of points (or use mean range per scan if you prefer)
-        if len(self._stamps) > 1:
-            stamps = list(self._stamps)
-            self.ax_time.plot(stamps, list(self._num_points), "b.-")
-            self.ax_time.set_xlabel("Timestamp (sec)")
-            self.ax_time.set_ylabel("Number of range points")
-            self.ax_time.set_title("Scan size over time")
-        else:
-            self.ax_time.set_title("Scan size over time (waiting for data)")
-            self.ax_time.set_ylabel("Number of range points")
+        angles_deg = [math.degrees(a) for a in angles_rad]
+        r_min, r_max = min(ranges), max(ranges)
+        r_mean = sum(ranges) / len(ranges)
+        lim_top = max(2.0, min(msg.range_max, 8.0))
 
-        self.ax_time.grid(True)
+        # ---- Left: Polar (Angle vs Range) - "radar" style ----
+        self.ax_polar.clear()
+        self.ax_polar.scatter(angles_deg, ranges, s=3, c=ranges, cmap="viridis", alpha=0.9)
+        self.ax_polar.set_xlabel("Angle (degrees)\n0° = front, ±180° = back")
+        self.ax_polar.set_ylabel("Range (m)")
+        self.ax_polar.set_title("Polar: distance at each angle")
+        self.ax_polar.set_ylim(0, lim_top)
+        self.ax_polar.axhline(y=1, color="gray", linestyle="--", alpha=0.5)
+        self.ax_polar.axhline(y=2, color="gray", linestyle="--", alpha=0.5)
+        self.ax_polar.grid(True, alpha=0.5)
+        # Stats text
+        stats = f"Points: {len(ranges)}\nMin: {r_min:.2f} m\nMax: {r_max:.2f} m\nMean: {r_mean:.2f} m"
+        self.ax_polar.text(0.02, 0.98, stats, transform=self.ax_polar.transAxes,
+                           fontsize=8, verticalalignment="top", family="monospace",
+                           bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8))
+
+        # ---- Right: Top-down (X, Y) with rings and directions ----
+        self.ax_top.clear()
+        xs = [r * math.cos(a) for a, r in zip(angles_rad, ranges)]
+        ys = [r * math.sin(a) for a, r in zip(angles_rad, ranges)]
+        self.ax_top.scatter(xs, ys, s=4, c=ranges, cmap="viridis", alpha=0.9)
+        # LiDAR at origin
+        self.ax_top.scatter([0], [0], s=120, marker="^", c="red", edgecolors="black", linewidths=1.5, zorder=5, label="LiDAR")
+        # Distance rings
+        _draw_distance_rings(self.ax_top, lim_top)
+        # Cardinal directions (ROS: X forward, Y left)
+        self.ax_top.arrow(0, 0, 0.4, 0, head_width=0.08, head_length=0.06, fc="red", ec="red")
+        self.ax_top.text(0.5, 0.05, "Front (0°)", fontsize=9, fontweight="bold")
+        self.ax_top.text(-0.6, 0.05, "Back", fontsize=8, alpha=0.8)
+        self.ax_top.text(0.05, 0.5, "Left", fontsize=8, alpha=0.8)
+        self.ax_top.text(-0.35, 0.5, "Right", fontsize=8, alpha=0.8)
+        self.ax_top.set_xlim(-lim_top, lim_top)
+        self.ax_top.set_ylim(-lim_top, lim_top)
+        self.ax_top.set_aspect("equal", adjustable="box")
+        self.ax_top.set_xlabel("X (m) — forward")
+        self.ax_top.set_ylabel("Y (m) — left")
+        self.ax_top.set_title("Top-down: you are at the red triangle")
+        self.ax_top.grid(True, alpha=0.4)
+
+        self.fig.tight_layout()
         self.plt.draw()
-        self.plt.pause(0.02)
+        self.plt.pause(0.01)
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = ScanPlotNode(history_len=100)
+    node = ScanPlotNode()
+
     try:
         while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.1)

@@ -23,12 +23,24 @@ class ScanReaderNode(Node):
         self._csv_file = None
         self._csv_writer = None
 
+
+
+        from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+        )
+
         self.sub = self.create_subscription(
             LaserScan,
             "scan",
             self.scan_callback,
-            10,
+            qos,
         )
+
+
         self.get_logger().info(
             f"Subscribed to /scan. Timestamps will be printed. Save CSV: {save_csv}"
         )

@@ -8,26 +8,23 @@ This project lets you read YDLidar G4 data over ROS2 on a Jetson Orin Nano Devel
 - **OS:** Ubuntu 22.04 (JetPack 5.x or 6.x)
 - **ROS2:** Humble (recommended for Orin Nano)
 
-## 1. Install ROS2 Humble (if not already)
+## Install ROS2 Humble on the Jetson (detailed)
 
-```bash
-# Set locale
-sudo apt update && sudo apt install -y locales
-sudo locale-gen en_US en_US.UTF-8
-sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
-export LANG=en_US.UTF-8
+**Follow the step-by-step guide:** [**docs/INSTALL_ROS2_JETSON.md**](docs/INSTALL_ROS2_JETSON.md)
 
-# Add ROS2 repo and install
-sudo apt install -y software-properties-common
-sudo add-apt-repository universe
-sudo apt update && sudo apt install -y curl
-sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
-sudo apt update
-sudo apt install -y ros-humble-desktop python3-colcon-common-extensions python3-rosdep
-```
+That guide covers:
 
-## 2. Install YDLidar SDK
+1. System update and locale (UTF-8)
+2. Adding the official ROS2 apt repository
+3. Installing `ros-humble-desktop` (or `ros-humble-ros-base`) and `ros-dev-tools`
+4. Sourcing the environment and making it permanent
+5. Verifying with talker/listener
+6. Creating a workspace with colcon
+7. Optional: YDLidar SDK, ydlidar_ros2_driver, and USB udev rules
+
+After you finish that, come back here for the lidar_tools workspace and running the G4.
+
+## 1. Install YDLidar SDK
 
 ```bash
 cd ~
@@ -39,7 +36,7 @@ make
 sudo make install
 ```
 
-## 3. Install YDLidar ROS2 driver (Humble)
+## 2. Install YDLidar ROS2 driver (Humble)
 
 ```bash
 mkdir -p ~/ros2_ws/src
@@ -50,7 +47,7 @@ source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 ```
 
-## 4. Configure for YDLidar G4
+## 3. Configure for YDLidar G4
 
 Create or edit the driver's config for G4. Example params (adjust port if needed):
 
@@ -66,7 +63,7 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 # Unplug and replug the LiDAR
 ```
 
-## 5. Build this workspace (lidar reader + plots)
+## 4. Build this workspace (lidar reader + plots)
 
 Copy this `lidar` folder to your Jetson (or clone there). The package is already under `src/lidar_tools/`.
 
@@ -83,7 +80,7 @@ Optional (for live and CSV plotting):
 pip3 install -r requirements.txt
 ```
 
-## 6. Run the LiDAR driver
+## 5. Run the LiDAR driver
 
 **Terminal 1 – start the G4 driver:**
 
@@ -102,7 +99,7 @@ The driver publishes `sensor_msgs/msg/LaserScan` on `/scan` with:
 - `ranges[]` – distance per ray
 - `intensities[]` – if supported by G4
 
-## 7. Read data and timestamps
+## 6. Read data and timestamps
 
 **Terminal 2 – run the reader node (logs timestamps and optional CSV):**
 
@@ -131,7 +128,7 @@ Optional: record raw topics for later analysis:
 ros2 bag record /scan
 ```
 
-## 8. Plot the data
+## 7. Plot the data
 
 **Terminal 3 – live polar plot and time-series:**
 
