@@ -28,6 +28,12 @@ class ScanPlotNode(Node):
     def __init__(self):
         super().__init__("scan_plot_node")
 
+        # Only show this many degrees (centered on front 0°). 0 = show full 360°
+        self.declare_parameter("fov_degrees", 360)
+        fov = self.get_parameter("fov_degrees").get_value_as_int()
+        self.fov_degrees = fov if fov > 0 else 360
+        self.half_fov_rad = math.radians(self.fov_degrees / 2.0)
+
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
@@ -43,7 +49,9 @@ class ScanPlotNode(Node):
             qos,
         )
 
-        self.get_logger().info("Subscribed to /scan. Starting live plot...")
+        self.get_logger().info(
+            f"Subscribed to /scan. FOV: {self.fov_degrees}° (0° = front). Starting live plot..."
+        )
         self.setup_plot()
 
     def setup_plot(self):
@@ -72,6 +80,9 @@ class ScanPlotNode(Node):
             angle = msg.angle_min + i * msg.angle_increment
             if not math.isfinite(r) or r < msg.range_min or r > msg.range_max:
                 continue
+            # Optional: only show points inside FOV (symmetric around 0°)
+            if self.fov_degrees < 360 and abs(angle) > self.half_fov_rad:
+                continue
             angles_rad.append(angle)
             ranges.append(float(r))
 
@@ -94,7 +105,9 @@ class ScanPlotNode(Node):
         self.ax_polar.scatter(angles_deg, ranges, s=3, c=ranges, cmap="viridis", alpha=0.9)
         self.ax_polar.set_xlabel("Angle (degrees)\n0° = front, ±180° = back")
         self.ax_polar.set_ylabel("Range (m)")
-        self.ax_polar.set_title("Polar: distance at each angle")
+        self.ax_polar.set_title(f"Polar: distance at each angle (FOV {self.fov_degrees}°)")
+        if self.fov_degrees < 360:
+            self.ax_polar.set_xlim(-self.fov_degrees / 2, self.fov_degrees / 2)
         self.ax_polar.set_ylim(0, lim_top)
         self.ax_polar.axhline(y=1, color="gray", linestyle="--", alpha=0.5)
         self.ax_polar.axhline(y=2, color="gray", linestyle="--", alpha=0.5)
@@ -125,7 +138,7 @@ class ScanPlotNode(Node):
         self.ax_top.set_aspect("equal", adjustable="box")
         self.ax_top.set_xlabel("X (m) — forward")
         self.ax_top.set_ylabel("Y (m) — left")
-        self.ax_top.set_title("Top-down: you are at the red triangle")
+        self.ax_top.set_title(f"Top-down (FOV {self.fov_degrees}°): you are at the red triangle")
         self.ax_top.grid(True, alpha=0.4)
 
         self.fig.tight_layout()
@@ -136,6 +149,7 @@ class ScanPlotNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = ScanPlotNode()
+    # Allow override from command line: ros2 run lidar_tools scan_plot_node --ros-args -p fov_degrees:=100
 
     try:
         while rclpy.ok():

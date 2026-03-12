@@ -43,7 +43,21 @@ def _draw_distance_rings(ax, r_max, step=1.0):
         ax.text(2.05, 0, "2m", fontsize=8, alpha=0.7)
 
 
-def plot_both(angles_rad, ranges, angles_deg, out_path=None):
+def _filter_fov(angles_rad, ranges, angles_deg, fov_degrees):
+    """Keep only points within ±fov_degrees/2 around 0°."""
+    if fov_degrees >= 360:
+        return angles_rad, ranges, angles_deg
+    half = fov_degrees / 2.0
+    out_rad, out_r, out_deg = [], [], []
+    for a_rad, r, a_deg in zip(angles_rad, ranges, angles_deg):
+        if -half <= a_deg <= half:
+            out_rad.append(a_rad)
+            out_r.append(r)
+            out_deg.append(a_deg)
+    return out_rad, out_r, out_deg
+
+
+def plot_both(angles_rad, ranges, angles_deg, out_path=None, fov_degrees=360):
     """Polar + top-down in one figure with stats and labels."""
     try:
         import matplotlib
@@ -52,6 +66,11 @@ def plot_both(angles_rad, ranges, angles_deg, out_path=None):
         import numpy as np
     except ImportError:
         print("Install matplotlib and numpy: pip3 install matplotlib numpy", file=sys.stderr)
+        sys.exit(1)
+
+    angles_rad, ranges, angles_deg = _filter_fov(angles_rad, ranges, angles_deg, fov_degrees)
+    if not ranges:
+        print("No points in selected FOV.", file=sys.stderr)
         sys.exit(1)
 
     r_min, r_max = min(ranges), max(ranges)
@@ -64,7 +83,9 @@ def plot_both(angles_rad, ranges, angles_deg, out_path=None):
     ax_polar.scatter(angles_deg, ranges, s=4, c=ranges, cmap="viridis", alpha=0.9)
     ax_polar.set_xlabel("Angle (degrees)\n0° = front, ±180° = back")
     ax_polar.set_ylabel("Range (m)")
-    ax_polar.set_title("Polar: distance at each angle")
+    ax_polar.set_title(f"Polar: distance at each angle (FOV {fov_degrees}°)")
+    if fov_degrees < 360:
+        ax_polar.set_xlim(-fov_degrees / 2, fov_degrees / 2)
     ax_polar.set_ylim(0, lim_top)
     ax_polar.axhline(y=1, color="gray", linestyle="--", alpha=0.5)
     ax_polar.axhline(y=2, color="gray", linestyle="--", alpha=0.5)
@@ -88,7 +109,7 @@ def plot_both(angles_rad, ranges, angles_deg, out_path=None):
     ax_top.set_aspect("equal", adjustable="box")
     ax_top.set_xlabel("X (m) — forward")
     ax_top.set_ylabel("Y (m) — left")
-    ax_top.set_title("Top-down: you are at the red triangle")
+    ax_top.set_title(f"Top-down (FOV {fov_degrees}°): you are at the red triangle")
     ax_top.grid(True, alpha=0.4)
 
     plt.tight_layout()
@@ -99,7 +120,7 @@ def plot_both(angles_rad, ranges, angles_deg, out_path=None):
         plt.show()
 
 
-def plot_polar_only(angles_deg, ranges, out_path=None):
+def plot_polar_only(angles_rad, ranges, angles_deg, out_path=None, fov_degrees=360):
     """Single polar plot (angle vs range)."""
     try:
         import matplotlib
@@ -109,11 +130,17 @@ def plot_polar_only(angles_deg, ranges, out_path=None):
         print("Install matplotlib and numpy: pip3 install matplotlib numpy", file=sys.stderr)
         sys.exit(1)
 
+    angles_rad, ranges, angles_deg = _filter_fov(angles_rad, ranges, angles_deg, fov_degrees)
+    if not ranges:
+        print("No points in selected FOV.", file=sys.stderr)
+        sys.exit(1)
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.scatter(angles_deg, ranges, s=4, c=ranges, cmap="viridis", alpha=0.9)
     ax.set_xlabel("Angle (degrees) — 0° = front")
     ax.set_ylabel("Range (m)")
-    ax.set_title("Polar: distance at each angle")
+    ax.set_title(f"Polar: distance at each angle (FOV {fov_degrees}°)")
+    if fov_degrees < 360:
+        ax.set_xlim(-fov_degrees / 2, fov_degrees / 2)
     r_max = max(ranges) if ranges else 10.0
     ax.set_ylim(0, r_max * 1.05)
     ax.grid(True, alpha=0.5)
@@ -133,7 +160,8 @@ def main():
         epilog="""
 Examples:
   python3 plot_scan.py scan_export.csv
-  python3 plot_scan.py scan_export.csv -o my_scan.png
+  python3 plot_scan.py scan_export.csv --fov 100
+  python3 plot_scan.py scan_export.csv -o my_scan.png --fov 100
   python3 plot_scan.py scan_export.csv --polar-only
 """
     )
@@ -142,6 +170,8 @@ Examples:
     parser.add_argument("--range-col", type=int, default=1)
     parser.add_argument("--skip-header", type=int, default=0)
     parser.add_argument("--polar-only", action="store_true", help="Only plot angle vs range (one panel)")
+    parser.add_argument("--fov", type=float, default=360, metavar="DEG",
+                        help="Show only this many degrees centered on 0° (e.g. 100 for ±50°). Default: 360")
     parser.add_argument("-o", "--output", help="Save figure to file")
     args = parser.parse_args()
 
@@ -160,10 +190,11 @@ Examples:
         print("No valid data in CSV.", file=sys.stderr)
         sys.exit(1)
 
+    fov = 360 if args.fov <= 0 else min(360, args.fov)
     if args.polar_only:
-        plot_polar_only(angles_deg, ranges, args.output)
+        plot_polar_only(angles_rad, ranges, angles_deg, args.output, fov)
     else:
-        plot_both(angles_rad, ranges, angles_deg, args.output)
+        plot_both(angles_rad, ranges, angles_deg, args.output, fov)
 
 
 if __name__ == "__main__":

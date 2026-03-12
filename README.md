@@ -54,6 +54,7 @@ Create or edit the driver's config for G4. Example params (adjust port if needed
 - **Port:** Check with `ls /dev/ttyUSB*` or `ls /dev/ttyACM*` when the G4 is connected.
 - **Baudrate:** 230400 for G4
 - **Lidar type:** G4 (often `lidar_type: 0` or `1` in config; check driver docs)
+- **Scan frequency:** G4 supports **5–12 Hz**. Set `frequency: 12` (or 10, 11) in the driver params to increase scan rate. See `config/ydlidar_g4_params.yaml` for an example.
 
 Add udev rule so you don't need sudo:
 
@@ -65,13 +66,36 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 ## 4. Build this workspace (lidar reader + plots)
 
-Copy this `lidar` folder to your Jetson (or clone there). The package is already under `src/lidar_tools/`.
+The package lives in `src/lidar_tools/`. You **must build** the workspace and **source the install** before `ros2 run lidar_tools ...` will work.
+
+**First time (from the project root, e.g. `~/Desktop/lidar`):**
+
+- Make sure you are **not** inside Trash (your path must not contain `Trash`). If the project is in Trash, copy it to e.g. `~/Desktop/lidar` or `~/lidar` first.
+- Open a **new terminal** (so stale `COLCON_PREFIX_PATH` / `AMENT_PREFIX_PATH` are cleared), then:
 
 ```bash
-cd ~/lidar   # or wherever you put this project
+cd ~/Desktop/lidar
+# Optional: clean if a previous build failed or paths are wrong
+rm -rf build install log
+unset COLCON_PREFIX_PATH AMENT_PREFIX_PATH
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 source install/setup.bash
+```
+
+Or run the helper script: `chmod +x clean_and_build.sh && ./clean_and_build.sh`
+
+**Every new terminal** (or add to `~/.bashrc`):
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/Desktop/lidar/install/setup.bash
+```
+
+Then run:
+
+```bash
+ros2 run lidar_tools scan_plot_node
 ```
 
 Optional (for live and CSV plotting):
@@ -138,6 +162,12 @@ source install/setup.bash
 ros2 run lidar_tools scan_plot_node
 ```
 
+**Show only 100° (centered on front):**
+
+```bash
+ros2 run lidar_tools scan_plot_node --ros-args -p fov_degrees:=100
+```
+
 Install matplotlib/numpy if needed: `pip3 install matplotlib numpy`
 
 **Plot from an exported CSV (angle_deg, range_m):**
@@ -145,7 +175,7 @@ Install matplotlib/numpy if needed: `pip3 install matplotlib numpy`
 ```bash
 cd /path/to/lidar
 python3 src/lidar_tools/lidar_tools/plot_scan.py scan_export.csv
-python3 src/lidar_tools/lidar_tools/plot_scan.py scan_export.csv --time-series -o plot.png
+python3 src/lidar_tools/lidar_tools/plot_scan.py scan_export.csv --fov 100 -o plot.png
 ```
 
 ## Project layout
