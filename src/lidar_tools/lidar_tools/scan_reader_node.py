@@ -7,6 +7,7 @@ Print formatted data: timestamp + (x, y) coordinates for obstacle avoidance and 
 import csv
 import math
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import rclpy
@@ -87,6 +88,13 @@ class ScanReaderNode(Node):
         nanosec = stamp.nanosec
         ros_time_sec = float(sec) + 1e-9 * float(nanosec)
 
+        # Human-readable time (local timezone)
+        try:
+            dt = datetime.fromtimestamp(ros_time_sec)
+            human_time = dt.strftime("%H:%M:%S") + f".{nanosec:09d}"[:7].rstrip("0") or ".0"
+        except (OSError, ValueError):
+            human_time = "(time out of range)"
+
         self.scan_count += 1
         points = self._get_points(msg)
 
@@ -94,7 +102,7 @@ class ScanReaderNode(Node):
         sep = "=" * 72
         print()
         print(sep)
-        print(f"  SCAN #{self.scan_count}  |  TIME: {sec}.{nanosec:09d}  (ROS time: {ros_time_sec:.6f} s)")
+        print(f"  SCAN #{self.scan_count}  |  TIME: {human_time}  (ROS: {ros_time_sec:.6f} s)")
         print(f"  FRAME: {msg.header.frame_id}  |  POINTS: {len(points)}  (valid)")
         print(sep)
         print(f"  {'idx':>5}  {'x (m)':>10}  {'y (m)':>10}  {'range (m)':>10}  {'angle (deg)':>11}")
