@@ -63,6 +63,14 @@ So the “form” of the points is: **polar (angle, range)** from the message, w
 
 ---
 
+## 3b. Why is angle_deg negative / not 0 to 100?
+
+- **angle_deg** is the **real** angle in the LiDAR frame: **0° = front**, **negative** = one side (e.g. right), **positive** = other side (e.g. left). The sensor usually reports about **-180° to +180°**.
+- When you set **--fov 100**, we **filter** to keep only points with **abs(angle_deg) ≤ 50** (i.e. **-50° to +50°**). So you still see **negative and positive** degrees — that’s the actual direction of each ray. **100** is the **total** field of view (50° left + 50° right of center), not an “angle index” from 0 to 100.
+- To get a 0–100 index over your FOV: e.g. `(angle_deg + 50) / 100 * 100` maps -50°..+50° to 0..100.
+
+---
+
 ## 4. Example in code (Python)
 
 ```python

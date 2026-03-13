@@ -80,16 +80,19 @@ class ScanReaderNode(Node):
         self.get_logger().info(f"Writing points (x,y) to {self.points_csv_path}")
 
     def _get_points(self, msg):
-        """Return list of (x, y, range, angle_deg) for valid points (optionally filtered by FOV and max range)."""
+        """Return list of (x, y, range, angle_deg). When there is no valid data for a ray, use range=0 and still show angle."""
         points = []
         for i, r in enumerate(msg.ranges):
-            if not math.isfinite(r) or r < msg.range_min or r > msg.range_max:
-                continue
-            if self.max_scan_range_m > 0 and float(r) > self.max_scan_range_m:
-                continue
             angle = msg.angle_min + i * msg.angle_increment
             angle_deg = math.degrees(angle)
             if self.fov_degrees < 360 and abs(angle_deg) > self.half_fov_deg:
+                continue
+            # No valid data: output range 0 and angle so user sees the scan direction
+            if not math.isfinite(r) or r < msg.range_min or r > msg.range_max:
+                points.append((0.0, 0.0, 0.0, angle_deg))
+                continue
+            if self.max_scan_range_m > 0 and float(r) > self.max_scan_range_m:
+                points.append((0.0, 0.0, 0.0, angle_deg))
                 continue
             x = float(r) * math.cos(angle)
             y = float(r) * math.sin(angle)
