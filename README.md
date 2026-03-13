@@ -144,9 +144,23 @@ Example output:
 ros2 run lidar_tools scan_reader_node --points-csv ~/lidar_points.csv
 ```
 
-Columns: `time_human`, `stamp_sec`, `stamp_nanosec`, `scan_id`, `point_idx`, `x_m`, `y_m`, `range_m`, `angle_deg`.  
-- **time_human**: readable timestamp (e.g. `2025-03-12 14:30:45.123456`).  
-- **x_m**, **y_m**: coordinates in meters (LiDAR at origin). Use this file for obstacle avoidance and path planning.
+**Limit angle (FOV) and range in the CSV** (same as in the plot — only points inside the cone and within max distance are saved):
+
+```bash
+# Only points within 100° (±50° in front) and within 2 m
+ros2 run lidar_tools scan_reader_node --points-csv ~/lidar_points.csv --fov 100 --max-range 2.0
+
+# Only points within 1 m (any angle)
+ros2 run lidar_tools scan_reader_node --points-csv ~/lidar_points.csv --max-range 1.0
+
+# Only 90° in front, 3 m max
+ros2 run lidar_tools scan_reader_node --points-csv ~/out.csv --fov 90 --max-range 3.0
+```
+
+- **--fov** (or **-f**): only include points within this many degrees centered on front (e.g. `100` = ±50°). Default 360 (no angle limit).  
+- **--max-range** (or **-r**, **--max-scan-range**): only include points with distance ≤ this value in meters (e.g. `1.0` = 1 m). Default 0 = no limit.
+
+Columns in CSV: `time_human`, `stamp_sec`, `stamp_nanosec`, `scan_id`, `point_idx`, `x_m`, `y_m`, `range_m`, `angle_deg`. Use for obstacle avoidance and path planning.
 
 Limit how many points are printed per scan (default 80):
 

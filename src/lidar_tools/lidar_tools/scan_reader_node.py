@@ -17,13 +17,17 @@ from sensor_msgs.msg import LaserScan
 
 
 class ScanReaderNode(Node):
-    def __init__(self, save_csv=False, csv_path=None, print_points=False, points_csv_path=None, max_points_print=80):
+    def __init__(self, save_csv=False, csv_path=None, print_points=False, points_csv_path=None, max_points_print=80,
+                 fov_degrees=360, max_scan_range_m=0.0):
         super().__init__("scan_reader_node")
         self.save_csv = save_csv
         self.csv_path = csv_path or str(Path.home() / "lidar_scans.csv")
         self.print_points = print_points
         self.points_csv_path = points_csv_path
         self.max_points_print = max(10, min(500, max_points_print))
+        self.fov_degrees = 360 if fov_degrees <= 0 else min(360, fov_degrees)
+        self.half_fov_deg = self.fov_degrees / 2.0
+        self.max_scan_range_m = max(0.0, float(max_scan_range_m))
         self.scan_count = 0
         self._csv_file = None
         self._csv_writer = None
@@ -43,8 +47,14 @@ class ScanReaderNode(Node):
             qos,
         )
 
+        filt = []
+        if self.fov_degrees < 360:
+            filt.append(f"FOV {self.fov_degrees}°")
+        if self.max_scan_range_m > 0:
+            filt.append(f"range ≤ {self.max_scan_range_m} m")
         self.get_logger().info(
             "Subscribed to /scan. Formatted output: time + (x, y) coordinates."
+            + (f" Filter: {', '.join(filt)}" if filt else "")
         )
         if self.save_csv:
             self._open_csv()
@@ -70,15 +80,19 @@ class ScanReaderNode(Node):
         self.get_logger().info(f"Writing points (x,y) to {self.points_csv_path}")
 
     def _get_points(self, msg):
-        """Return list of (x, y, range, angle_deg) for valid points."""
+        """Return list of (x, y, range, angle_deg) for valid points (optionally filtered by FOV and max range)."""
         points = []
         for i, r in enumerate(msg.ranges):
             if not math.isfinite(r) or r < msg.range_min or r > msg.range_max:
                 continue
+            if self.max_scan_range_m > 0 and float(r) > self.max_scan_range_m:
+                continue
             angle = msg.angle_min + i * msg.angle_increment
+            angle_deg = math.degrees(angle)
+            if self.fov_degrees < 360 and abs(angle_deg) > self.half_fov_deg:
+                continue
             x = float(r) * math.cos(angle)
             y = float(r) * math.sin(angle)
-            angle_deg = math.degrees(angle)
             points.append((x, y, float(r), angle_deg))
         return points
 
@@ -106,7 +120,8 @@ class ScanReaderNode(Node):
         print()
         print(sep)
         print(f"  SCAN #{self.scan_count}  |  TIME: {human_time}  (ROS: {ros_time_sec:.6f} s)")
-        print(f"  FRAME: {msg.header.frame_id}  |  POINTS: {len(points)}  (valid)")
+        print(f"  FRAME: {msg.header.frame_id}  |  POINTS: {len(points)}  (valid)" +
+              (f"  [FOV={self.fov_degrees}° range≤{self.max_scan_range_m}m]" if (self.fov_degrees < 360 or self.max_scan_range_m > 0) else ""))
         print(sep)
         print(f"  {'idx':>5}  {'x (m)':>10}  {'y (m)':>10}  {'range (m)':>10}  {'angle (deg)':>11}")
         print("  " + "-" * 52)
@@ -171,13 +186,33 @@ def main(args=None):
                 pass
             break
 
+    fov_deg = 360
+    for i, arg in enumerate(argv):
+        if arg in ("--fov", "-f") and i + 1 < len(argv):
+            try:
+                fov_deg = int(float(argv[i + 1]))
+            except ValueError:
+                pass
+            break
+
+    max_range_m = 0.0
+    for i, arg in enumerate(argv):
+        if arg in ("--max-range", "--max-scan-range", "-r") and i + 1 < len(argv):
+            try:
+                max_range_m = float(argv[i + 1])
+            except ValueError:
+                pass
+            break
+
     rclpy.init(args=args)
     node = ScanReaderNode(
         save_csv=save_csv,
         csv_path=csv_path,
-        print_points=True,  # always print formatted time + (x,y) table
+        print_points=True,
         points_csv_path=points_csv_path,
         max_points_print=max_pp,
+        fov_degrees=fov_deg,
+        max_scan_range_m=max_range_m,
     )
     try:
         rclpy.spin(node)
