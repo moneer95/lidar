@@ -123,14 +123,33 @@ The driver publishes `sensor_msgs/msg/LaserScan` on `/scan` with:
 - `ranges[]` – distance per ray
 - `intensities[]` – if supported by G4
 
-## 6. Read data and timestamps
+## 6. Read data and timestamps (formatted for obstacle avoidance / path planning)
 
-**Terminal 2 – run the reader node (logs timestamps and optional CSV):**
+**Terminal 2 – run the reader node.** It prints **time** and **coordinates (x, y)** for each scan in a clear table:
 
 ```bash
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 run lidar_tools scan_reader_node
+```
+
+Example output:
+- **SCAN #** and **TIME** (stamp + ROS time)
+- **POINTS** count and **FRAME**
+- Table: **idx**, **x (m)**, **y (m)**, **range (m)**, **angle (deg)** — LiDAR at origin, X forward, Y left.
+
+**Export points to CSV** (one row per point — for path planning / obstacle avoidance):
+
+```bash
+ros2 run lidar_tools scan_reader_node --points-csv ~/lidar_points.csv
+```
+
+Columns: `stamp_sec`, `stamp_nanosec`, `scan_id`, `point_idx`, `x_m`, `y_m`, `range_m`, `angle_deg`. Use this file in your autonomous stack to find obstacles and paths.
+
+Limit how many points are printed per scan (default 80):
+
+```bash
+ros2 run lidar_tools scan_reader_node --max-print 50
 ```
 
 Log scan metadata (timestamps, frame_id, angles, num_ranges) to CSV:
@@ -189,7 +208,7 @@ python3 src/lidar_tools/lidar_tools/plot_scan.py scan_export.csv --fov 100 -o pl
 ## Project layout
 
 - `src/lidar_tools/` – ROS2 package:
-  - `scan_reader_node` – subscribes to `/scan`, prints timestamps, optional `--csv` for metadata CSV
+  - `scan_reader_node` – subscribes to `/scan`, prints formatted time + (x,y) table; optional `--points-csv` for obstacle/path data, `--csv` for metadata
   - `export_scan_node` – writes one scan to CSV (angle_deg, range_m) then exits
   - `scan_plot_node` – live polar + time-series graphs from `/scan`
   - `plot_scan.py` – standalone script to plot from CSV
