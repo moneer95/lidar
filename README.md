@@ -138,13 +138,15 @@ Example output:
 - **POINTS** count and **FRAME**
 - Table: **idx**, **x (m)**, **y (m)**, **range (m)**, **angle (deg)** — LiDAR at origin, X forward, Y left.
 
-**Export points to CSV** (one row per point — for path planning / obstacle avoidance):
+**Save data to CSV with the new format** (human-readable time + coordinates, one row per point):
 
 ```bash
 ros2 run lidar_tools scan_reader_node --points-csv ~/lidar_points.csv
 ```
 
-Columns: `stamp_sec`, `stamp_nanosec`, `scan_id`, `point_idx`, `x_m`, `y_m`, `range_m`, `angle_deg`. Use this file in your autonomous stack to find obstacles and paths.
+Columns: `time_human`, `stamp_sec`, `stamp_nanosec`, `scan_id`, `point_idx`, `x_m`, `y_m`, `range_m`, `angle_deg`.  
+- **time_human**: readable timestamp (e.g. `2025-03-12 14:30:45.123456`).  
+- **x_m**, **y_m**: coordinates in meters (LiDAR at origin). Use this file for obstacle avoidance and path planning.
 
 Limit how many points are printed per scan (default 80):
 

@@ -65,7 +65,7 @@ class ScanReaderNode(Node):
         self._points_csv_file = open(self.points_csv_path, "w", newline="")
         self._points_csv_writer = csv.writer(self._points_csv_file)
         self._points_csv_writer.writerow([
-            "stamp_sec", "stamp_nanosec", "scan_id", "point_idx", "x_m", "y_m", "range_m", "angle_deg",
+            "time_human", "stamp_sec", "stamp_nanosec", "scan_id", "point_idx", "x_m", "y_m", "range_m", "angle_deg",
         ])
         self.get_logger().info(f"Writing points (x,y) to {self.points_csv_path}")
 
@@ -91,9 +91,12 @@ class ScanReaderNode(Node):
         # Human-readable time (local timezone)
         try:
             dt = datetime.fromtimestamp(ros_time_sec)
-            human_time = dt.strftime("%H:%M:%S") + f".{nanosec:09d}"[:7].rstrip("0") or ".0"
+            frac = f".{nanosec:09d}"[:7].rstrip("0") or ".0"
+            human_time = dt.strftime("%H:%M:%S") + frac
+            human_time_csv = dt.strftime("%Y-%m-%d %H:%M:%S") + frac
         except (OSError, ValueError):
             human_time = "(time out of range)"
+            human_time_csv = ""
 
         self.scan_count += 1
         points = self._get_points(msg)
@@ -125,11 +128,11 @@ class ScanReaderNode(Node):
             ])
             self._csv_file.flush()
 
-        # ----- Points CSV: one row per point for path planning / obstacle avoidance -----
+        # ----- Points CSV: one row per point (with human-readable time) -----
         if self._points_csv_writer:
             for idx, (x, y, r, a) in enumerate(points):
                 self._points_csv_writer.writerow([
-                    sec, nanosec, self.scan_count, idx, f"{x:.6f}", f"{y:.6f}", f"{r:.6f}", f"{a:.4f}",
+                    human_time_csv, sec, nanosec, self.scan_count, idx, f"{x:.6f}", f"{y:.6f}", f"{r:.6f}", f"{a:.4f}",
                 ])
             self._points_csv_file.flush()
 
