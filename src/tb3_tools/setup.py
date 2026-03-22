@@ -19,6 +19,7 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
+            "tb3_arrow_teleop = tb3_tools.arrow_teleop:main",
             "tb3_forward_test = tb3_tools.forward_test:main",
             "tb3_single_wheel_test = tb3_tools.single_wheel_test:main",
         ],

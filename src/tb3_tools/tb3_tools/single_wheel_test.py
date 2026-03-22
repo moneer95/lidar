@@ -8,6 +8,8 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 
+from tb3_tools.motor_util import enable_motor_power
+
 
 def main() -> None:
     rclpy.init()
@@ -17,12 +19,16 @@ def main() -> None:
     node.declare_parameter("wheel_separation_m", 0.160)
     node.declare_parameter("duration_sec", 3.0)
     node.declare_parameter("publish_hz", 20.0)
+    node.declare_parameter("stop_hold_sec", 2.0)
+    node.declare_parameter("enable_motors", True)
+    node.declare_parameter("motor_power_service", "/motor_power")
 
     side = str(node.get_parameter("side").value).lower().strip()
     omega = float(node.get_parameter("angular_z").value)
     L = float(node.get_parameter("wheel_separation_m").value)
     duration = float(node.get_parameter("duration_sec").value)
     hz = float(node.get_parameter("publish_hz").value)
+    stop_hold = float(node.get_parameter("stop_hold_sec").value)
 
     if side not in ("left", "right"):
         node.get_logger().error('Parameter "side" must be "left" or "right".')
@@ -39,6 +45,11 @@ def main() -> None:
         twist.linear.x = half * omega
         twist.angular.z = omega
 
+    if bool(node.get_parameter("enable_motors").value):
+        enable_motor_power(
+            node, service_name=str(node.get_parameter("motor_power_service").value)
+        )
+
     pub = node.create_publisher(Twist, "/cmd_vel", 10)
     period = 1.0 / hz if hz > 0 else 0.05
 
@@ -52,8 +63,15 @@ def main() -> None:
         pub.publish(twist)
         rclpy.spin_once(node, timeout_sec=period)
 
-    pub.publish(Twist())
-    node.get_logger().info("Sent zero velocity (stop).")
+    stop = Twist()
+    t_stop = node.get_clock().now() + rclpy.duration.Duration(seconds=stop_hold)
+    node.get_logger().info(
+        f"Publishing zero cmd_vel for {stop_hold} s so OpenCR does not hold last speed."
+    )
+    while rclpy.ok() and node.get_clock().now() < t_stop:
+        pub.publish(stop)
+        rclpy.spin_once(node, timeout_sec=period)
+    node.get_logger().info("Stop hold finished.")
 
     node.destroy_node()
     rclpy.shutdown()

@@ -4,17 +4,27 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 
+from tb3_tools.motor_util import enable_motor_power
+
 
 class Tb3ForwardTest(Node):
     def __init__(self) -> None:
         super().__init__("tb3_forward_test")
         self.declare_parameter("duration_sec", 2.0)
-        self.declare_parameter("linear_x_m_s", 0.08)
+        self.declare_parameter("linear_x_m_s", 0.06)
         self.declare_parameter("publish_hz", 20.0)
+        self.declare_parameter("stop_hold_sec", 2.0)
+        self.declare_parameter("enable_motors", True)
+        self.declare_parameter("motor_power_service", "/motor_power")
 
         duration = float(self.get_parameter("duration_sec").value)
         linear_x = float(self.get_parameter("linear_x_m_s").value)
         hz = float(self.get_parameter("publish_hz").value)
+        stop_hold = float(self.get_parameter("stop_hold_sec").value)
+
+        if bool(self.get_parameter("enable_motors").value):
+            svc = str(self.get_parameter("motor_power_service").value)
+            enable_motor_power(self, service_name=svc)
 
         self._pub = self.create_publisher(Twist, "/cmd_vel", 10)
         period = 1.0 / hz if hz > 0 else 0.05
@@ -31,8 +41,14 @@ class Tb3ForwardTest(Node):
             rclpy.spin_once(self, timeout_sec=period)
 
         stop = Twist()
-        self._pub.publish(stop)
-        self.get_logger().info("Sent zero velocity (stop).")
+        t_stop = self.get_clock().now() + rclpy.duration.Duration(seconds=stop_hold)
+        self.get_logger().info(
+            f"Publishing zero cmd_vel for {stop_hold} s so OpenCR does not hold last speed."
+        )
+        while rclpy.ok() and self.get_clock().now() < t_stop:
+            self._pub.publish(stop)
+            rclpy.spin_once(self, timeout_sec=period)
+        self.get_logger().info("Stop hold finished.")
 
 
 def main() -> None:
