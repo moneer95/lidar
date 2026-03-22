@@ -62,6 +62,8 @@ class GapNav(Node):
 
         self.declare_parameter("enable_motors", True)
         self.declare_parameter("motor_power_service", "/motor_power")
+        # If lidar/robot +X is opposite real drive direction: negate cmd_vel linear + angular.
+        self.declare_parameter("invert_drive", True)
 
         scan_topic = str(self.get_parameter("scan_topic").value)
         cmd_topic = str(self.get_parameter("cmd_vel_topic").value)
@@ -90,10 +92,11 @@ class GapNav(Node):
         self.create_timer(period, self._on_timer)
 
         off_deg = float(self.get_parameter("forward_lidar_angle_deg").value)
+        inv = bool(self.get_parameter("invert_drive").value)
         self.get_logger().info(
             f"Gap nav: scan={scan_topic} -> {cmd_topic}; "
-            f"forward_lidar_angle_deg={off_deg} (0 rad in logic = robot +X). "
-            "Widest clear sector in forward FOV; steer to its center."
+            f"forward_lidar_angle_deg={off_deg} (0 rad in logic = robot +X); "
+            f"invert_drive={inv}. Widest clear sector in forward FOV; steer to its center."
         )
 
     def _body_frame_angles(self, scan: LaserScan) -> List[float]:
@@ -226,6 +229,9 @@ class GapNav(Node):
 
         twist.linear.x = v
         twist.angular.z = w
+        if bool(self.get_parameter("invert_drive").value):
+            twist.linear.x = -twist.linear.x
+            twist.angular.z = -twist.angular.z
         self._pub.publish(twist)
 
 
