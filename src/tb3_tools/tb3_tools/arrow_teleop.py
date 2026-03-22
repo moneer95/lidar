@@ -12,6 +12,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
 
+from tb3_tools.motor_util import enable_motor_power
+
 if os.name != "nt":
     import termios
     import tty
@@ -35,6 +37,7 @@ TurtleBot3 arrow teleop (tb3_tools)
   space : stop (zero velocity)
 
   Same limits as turtlebot3_teleop; set TURTLEBOT3_MODEL=burger or waffle.
+  On startup we call /motor_power on so wheels can move (like tb3_forward_test).
 
 Ctrl-C to quit
 """
@@ -127,8 +130,21 @@ def main() -> None:
 
     rclpy.init()
     node = Node("tb3_arrow_teleop")
+    node.declare_parameter("enable_motors", True)
+    node.declare_parameter("motor_power_service", "/motor_power")
+
     qos = QoSProfile(depth=10)
     pub = node.create_publisher(Twist, "/cmd_vel", qos)
+
+    if bool(node.get_parameter("enable_motors").value):
+        svc = str(node.get_parameter("motor_power_service").value)
+        if enable_motor_power(node, service_name=svc):
+            print("Motors enabled (/motor_power). If wheels still ignore cmd_vel, call the service manually.")
+        else:
+            print(
+                "WARNING: /motor_power not available or failed. With bringup running, try:\n"
+                "  ros2 service call /motor_power std_srvs/srv/SetBool \"{data: true}\""
+            )
 
     target_linear = 0.0
     target_angular = 0.0
