@@ -6,9 +6,13 @@ Full 360° around the LiDAR — everything as a circle/map.
 
 import math
 import rclpy
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import LaserScan
+
+# Allow -p foo:=120 without INTEGER vs DOUBLE clashes from the ROS CLI.
+_PARAM_NUM = ParameterDescriptor(dynamic_typing=True)
 
 
 def _wrap_pi(a: float) -> float:
@@ -34,13 +38,13 @@ class ScanPlotNode(Node):
     def __init__(self):
         super().__init__("scan_plot_node")
 
-        self.declare_parameter("fov_degrees", 360)
+        self.declare_parameter("fov_degrees", 360.0, _PARAM_NUM)
         # Center of FOV cone in LaserScan angle frame (deg). 0 = forward = angle 0 in /scan.
-        self.declare_parameter("fov_center_deg", 0.0)
-        self.declare_parameter("max_range_m", 5.0)   # max view distance (zoom). Increase to see farther.
-        self.declare_parameter("max_scan_range_m", 0.0)  # only show points within this distance (m). 0 = no limit. e.g. 1.0 = 1 m
-        fov = int(self.get_parameter("fov_degrees").value)
-        self.fov_degrees = fov if fov > 0 else 360
+        self.declare_parameter("fov_center_deg", 0.0, _PARAM_NUM)
+        self.declare_parameter("max_range_m", 5.0, _PARAM_NUM)
+        self.declare_parameter("max_scan_range_m", 0.0, _PARAM_NUM)
+        fov = float(self.get_parameter("fov_degrees").value)
+        self.fov_degrees = fov if fov > 0 else 360.0
         self.half_fov_rad = math.radians(self.fov_degrees / 2.0)
         self.fov_center_rad = math.radians(float(self.get_parameter("fov_center_deg").value))
         self.max_range_m = float(self.get_parameter("max_range_m").value)
@@ -91,7 +95,7 @@ class ScanPlotNode(Node):
             angle = msg.angle_min + i * msg.angle_increment
             if not math.isfinite(r) or r < msg.range_min or r > msg.range_max:
                 continue
-            if self.fov_degrees < 360:
+            if self.fov_degrees < 360.0:
                 rel = _wrap_pi(angle - self.fov_center_rad)
                 if abs(rel) > self.half_fov_rad:
                     continue
