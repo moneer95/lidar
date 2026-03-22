@@ -13,6 +13,7 @@ from geometry_msgs.msg import Twist
 import rclpy
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import LaserScan
 
 from tb3_tools.motor_util import enable_motor_power
@@ -72,7 +73,15 @@ class GapNav(Node):
             )
 
         self._pub = self.create_publisher(Twist, cmd_topic, 10)
-        self._sub = self.create_subscription(LaserScan, scan_topic, self._on_scan, 10)
+        # Match typical /scan publishers (e.g. YDLidar): BEST_EFFORT — default RELIABLE gets no data.
+        _scan_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+        )
+        self._sub = self.create_subscription(
+            LaserScan, scan_topic, self._on_scan, _scan_qos
+        )
         self._last_scan: Optional[LaserScan] = None
         self._last_emergency_warn = None
 
