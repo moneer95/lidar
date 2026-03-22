@@ -11,6 +11,14 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import LaserScan
 
 
+def _wrap_pi(a: float) -> float:
+    while a > math.pi:
+        a -= 2.0 * math.pi
+    while a < -math.pi:
+        a += 2.0 * math.pi
+    return a
+
+
 def _draw_distance_rings(ax, r_max, step=1.0):
     """Draw concentric circles at 1m, 2m, ..."""
     import numpy as np
@@ -27,11 +35,14 @@ class ScanPlotNode(Node):
         super().__init__("scan_plot_node")
 
         self.declare_parameter("fov_degrees", 360)
+        # Center of FOV cone in LaserScan angle frame (deg). 0 = forward = angle 0 in /scan.
+        self.declare_parameter("fov_center_deg", 0.0)
         self.declare_parameter("max_range_m", 5.0)   # max view distance (zoom). Increase to see farther.
         self.declare_parameter("max_scan_range_m", 0.0)  # only show points within this distance (m). 0 = no limit. e.g. 1.0 = 1 m
         fov = int(self.get_parameter("fov_degrees").value)
         self.fov_degrees = fov if fov > 0 else 360
         self.half_fov_rad = math.radians(self.fov_degrees / 2.0)
+        self.fov_center_rad = math.radians(float(self.get_parameter("fov_center_deg").value))
         self.max_range_m = float(self.get_parameter("max_range_m").value)
         self.max_scan_range_m = float(self.get_parameter("max_scan_range_m").value)
 
@@ -80,8 +91,10 @@ class ScanPlotNode(Node):
             angle = msg.angle_min + i * msg.angle_increment
             if not math.isfinite(r) or r < msg.range_min or r > msg.range_max:
                 continue
-            if self.fov_degrees < 360 and abs(angle) > self.half_fov_rad:
-                continue
+            if self.fov_degrees < 360:
+                rel = _wrap_pi(angle - self.fov_center_rad)
+                if abs(rel) > self.half_fov_rad:
+                    continue
             # Optional: only show points within max_scan_range_m (e.g. 1.0 = 1 m only)
             if self.max_scan_range_m > 0 and float(r) > self.max_scan_range_m:
                 continue

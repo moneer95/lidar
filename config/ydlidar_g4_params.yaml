@@ -1,16 +1,19 @@
 # YDLidar G4 – example params for ydlidar_ros2_driver
 # Copy or merge into your driver launch/config (e.g. ydlidar_ros2_driver params).
 #
-# Scan frequency: G4 supports 5–12 Hz. Higher = more scans per second.
-# Port: set to your device, e.g. /dev/ttyUSB0 or /dev/ttyACM0
+# Geometry (degrees in driver frame):
+#   120° wide arc centered at 120° → angle_min=60, angle_max=180.
+# Range: only report up to 0.4 m (range_max). G4 physical min ~0.12 m.
+#
+# Match tb3_gap_nav: forward_lidar_angle_deg:=120, fov_deg:=120
 
 ydlidar_ros2_driver:
   ros__parameters:
     port: "/dev/ttyUSB0"
     baudrate: 230400
     frame_id: "laser_frame"
-    # Scan rate in Hz (G4 range: 5–12). Default often 10.
     frequency: 12
-    # Optional: limit angle range (degrees). Driver may support angle_max/angle_min.
-    # angle_min: -50.0   # only if your driver supports it
-    # angle_max: 50.0
+    angle_min: 60.0
+    angle_max: 180.0
+    range_min: 0.12
+    range_max: 0.4

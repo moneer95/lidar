@@ -33,23 +33,23 @@ class GapNav(Node):
         self.declare_parameter("control_hz", 20.0)
 
         # Forward sector (symmetric around body-frame angle 0 = robot +X forward)
-        self.declare_parameter("fov_deg", 100.0)
+        self.declare_parameter("fov_deg", 120.0)
         # Raw LaserScan angle (deg) that points along robot +X; subtracted from each beam.
         # Example: if the driver’s 0° is to the side but forward is at +120° in that frame, set 120.
-        self.declare_parameter("forward_lidar_angle_deg", 0.0)
+        self.declare_parameter("forward_lidar_angle_deg", 120.0)
 
         # Ray is "free" if range >= this (m); else treated as obstacle for gap detection
-        self.declare_parameter("clear_distance_m", 0.55)
-        # Ignore readings beyond this when classifying (far noise)
-        self.declare_parameter("max_obstacle_range_m", 4.0)
+        self.declare_parameter("clear_distance_m", 0.32)
+        # Ignore readings beyond this when classifying (match lidar range_max, e.g. 0.4 m)
+        self.declare_parameter("max_obstacle_range_m", 0.4)
 
-        self.declare_parameter("linear_x", 0.07)
-        self.declare_parameter("max_angular_z", 1.2)
-        self.declare_parameter("angular_gain", 2.0)
+        self.declare_parameter("linear_x", 0.04)
+        self.declare_parameter("max_angular_z", 0.65)
+        self.declare_parameter("angular_gain", 1.2)
 
         # Slow down when turning hard
         self.declare_parameter("align_threshold_rad", 0.35)
-        self.declare_parameter("linear_scale_when_misaligned", 0.35)
+        self.declare_parameter("linear_scale_when_misaligned", 0.25)
 
         # Stop if anything this close in a narrow safety wedge
         self.declare_parameter("emergency_stop_m", 0.22)
