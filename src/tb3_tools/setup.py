@@ -20,6 +20,7 @@ setup(
     entry_points={
         "console_scripts": [
             "tb3_forward_test = tb3_tools.forward_test:main",
+            "tb3_single_wheel_test = tb3_tools.single_wheel_test:main",
         ],
     },
 )
