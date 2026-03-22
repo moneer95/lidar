@@ -11,10 +11,14 @@ from typing import List, Optional, Tuple
 
 from geometry_msgs.msg import Twist
 import rclpy
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 
 from tb3_tools.motor_util import enable_motor_power
+
+# CLI often passes integers (e.g. -p fov_deg:=80); avoid INTEGER vs DOUBLE errors.
+_PARAM_NUM = ParameterDescriptor(dynamic_typing=True)
 
 
 def _wrap_pi(a: float) -> float:
@@ -30,30 +34,30 @@ class GapNav(Node):
         super().__init__("tb3_gap_nav")
         self.declare_parameter("scan_topic", "/scan")
         self.declare_parameter("cmd_vel_topic", "/cmd_vel")
-        self.declare_parameter("control_hz", 20.0)
+        self.declare_parameter("control_hz", 20.0, _PARAM_NUM)
 
         # Forward sector (symmetric around body-frame angle 0 = robot +X forward)
-        self.declare_parameter("fov_deg", 120.0)
+        self.declare_parameter("fov_deg", 120.0, _PARAM_NUM)
         # Raw LaserScan angle (deg) that points along robot +X; subtracted from each beam.
         # Example: if the driver’s 0° is to the side but forward is at +120° in that frame, set 120.
-        self.declare_parameter("forward_lidar_angle_deg", 120.0)
+        self.declare_parameter("forward_lidar_angle_deg", 120.0, _PARAM_NUM)
 
         # Ray is "free" if range >= this (m); else treated as obstacle for gap detection
-        self.declare_parameter("clear_distance_m", 0.32)
+        self.declare_parameter("clear_distance_m", 0.32, _PARAM_NUM)
         # Ignore readings beyond this when classifying (match lidar range_max, e.g. 0.4 m)
-        self.declare_parameter("max_obstacle_range_m", 0.4)
+        self.declare_parameter("max_obstacle_range_m", 0.4, _PARAM_NUM)
 
-        self.declare_parameter("linear_x", 0.04)
-        self.declare_parameter("max_angular_z", 0.65)
-        self.declare_parameter("angular_gain", 1.2)
+        self.declare_parameter("linear_x", 0.04, _PARAM_NUM)
+        self.declare_parameter("max_angular_z", 0.65, _PARAM_NUM)
+        self.declare_parameter("angular_gain", 1.2, _PARAM_NUM)
 
         # Slow down when turning hard
-        self.declare_parameter("align_threshold_rad", 0.35)
-        self.declare_parameter("linear_scale_when_misaligned", 0.25)
+        self.declare_parameter("align_threshold_rad", 0.35, _PARAM_NUM)
+        self.declare_parameter("linear_scale_when_misaligned", 0.25, _PARAM_NUM)
 
         # Stop if anything this close in a narrow safety wedge
-        self.declare_parameter("emergency_stop_m", 0.22)
-        self.declare_parameter("safety_fov_deg", 70.0)
+        self.declare_parameter("emergency_stop_m", 0.22, _PARAM_NUM)
+        self.declare_parameter("safety_fov_deg", 70.0, _PARAM_NUM)
 
         self.declare_parameter("enable_motors", True)
         self.declare_parameter("motor_power_service", "/motor_power")
