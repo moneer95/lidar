@@ -58,6 +58,8 @@ def generate_launch_description():
         "map": LaunchConfiguration("map"),
         "params_file": LaunchConfiguration("params_file"),
         "use_sim_time": LaunchConfiguration("use_sim_time"),
+        # Avoid component-container TF remapping edge cases during debugging.
+        "use_composition": "False",
     }
 
     def _bringup():
