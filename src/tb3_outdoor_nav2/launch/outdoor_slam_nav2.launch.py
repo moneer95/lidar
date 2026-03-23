@@ -43,7 +43,8 @@ def generate_launch_description():
         default_params = os.path.join(tb3_nav, "param", "humble", "burger.yaml")
     else:
         default_map = os.path.join(tb3_outdoor_share, "config", "map.yaml")
-        default_params = os.path.join(nav2_bringup, "params", "nav2_params.yaml")
+        # Standalone fallback when turtlebot3_navigation2 isn't installed.
+        default_params = os.path.join(tb3_outdoor_share, "config", "burger_nav2.yaml")
     bringup_py = os.path.join(nav2_bringup, "launch", "bringup_launch.py")
 
     invert_cmd_vel = LaunchConfiguration("invert_cmd_vel")
