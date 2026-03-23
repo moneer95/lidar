@@ -75,7 +75,7 @@ def generate_launch_description():
             Node(
                 package="tf2_ros",
                 executable="static_transform_publisher",
-                name="static_tf_pub_base_footprint",
+                name="static_tf_pub_base_footprint_to_base_link",
                 arguments=[
                     "0",
                     "0",
@@ -84,8 +84,10 @@ def generate_launch_description():
                     "0",
                     "0",
                     "1",
-                    "base_link",
+                    # Use base_footprint as parent so wheel TF on base_link connects
+                    # via base_footprint -> base_link.
                     "base_footprint",
+                    "base_link",
                 ],
                 output="screen",
             ),
