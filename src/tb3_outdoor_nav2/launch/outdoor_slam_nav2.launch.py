@@ -67,6 +67,25 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            # slam_toolbox defaults to `base_frame: base_footprint`, but this robot often
+            # publishes only `base_link`. Create a static TF so SLAM/Nav2 frames exist.
+            Node(
+                package="tf2_ros",
+                executable="static_transform_publisher",
+                name="static_tf_pub_base_footprint",
+                arguments=[
+                    "0",
+                    "0",
+                    "0",
+                    "0",
+                    "0",
+                    "0",
+                    "1",
+                    "base_link",
+                    "base_footprint",
+                ],
+                output="screen",
+            ),
             DeclareLaunchArgument(
                 "use_sim_time",
                 # Use Python-style booleans since Nav2 launch files use IfCondition(slam/use_sim_time).
