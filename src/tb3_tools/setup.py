@@ -23,8 +23,6 @@ setup(
             "tb3_arrow_teleop = tb3_tools.arrow_teleop:main",
             "tb3_forward_test = tb3_tools.forward_test:main",
             "tb3_single_wheel_test = tb3_tools.single_wheel_test:main",
-            "tb3_cmd_vel_invert = tb3_tools.cmd_vel_invert:main",
-            "tb3_odom_tf_broadcaster = tb3_tools.odom_tf_broadcaster:main",
         ],
     },
 )
