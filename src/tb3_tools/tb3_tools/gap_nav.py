@@ -66,6 +66,13 @@ class GapNav(Node):
         # Default to True so "invert" behavior is enabled out-of-the-box.
         self.declare_parameter("invert_drive", True)
 
+        # Auto-config: derive nav FOV + range thresholds from the incoming LaserScan
+        # so `tb3_gap_nav` matches your LiDAR driver YAML without separate params.
+        self.declare_parameter("auto_config_from_scan", True)
+        self.declare_parameter("clear_distance_fraction", 0.8)
+        self.declare_parameter("emergency_stop_fraction", 0.55)
+        self._autoconfig_done = False
+
         scan_topic = str(self.get_parameter("scan_topic").value)
         cmd_topic = str(self.get_parameter("cmd_vel_topic").value)
 
@@ -109,6 +116,55 @@ class GapNav(Node):
         ]
 
     def _on_scan(self, msg: LaserScan) -> None:
+        if bool(self.get_parameter("auto_config_from_scan").value) and not self._autoconfig_done:
+            # LaserScan stores angles in radians. We map robot "forward" to the midpoint
+            # of the configured arc, and set thresholds from scan.range_max.
+            angle_min_deg = math.degrees(float(msg.angle_min))
+            angle_max_deg = math.degrees(float(msg.angle_max))
+            fov = abs(angle_max_deg - angle_min_deg)
+            center = (angle_min_deg + angle_max_deg) / 2.0
+
+            r_max = float(msg.range_max)
+            if math.isfinite(r_max) and r_max > 0.0 and fov > 0.0:
+                clear_frac = float(self.get_parameter("clear_distance_fraction").value)
+                stop_frac = float(self.get_parameter("emergency_stop_fraction").value)
+
+                self.set_parameters(
+                    [
+                        rclpy.parameter.Parameter(
+                            "fov_deg",
+                            rclpy.Parameter.Type.DOUBLE,
+                            float(fov),
+                        ),
+                        rclpy.parameter.Parameter(
+                            "forward_lidar_angle_deg",
+                            rclpy.Parameter.Type.DOUBLE,
+                            float(center),
+                        ),
+                        rclpy.parameter.Parameter(
+                            "max_obstacle_range_m",
+                            rclpy.Parameter.Type.DOUBLE,
+                            r_max,
+                        ),
+                        rclpy.parameter.Parameter(
+                            "clear_distance_m",
+                            rclpy.Parameter.Type.DOUBLE,
+                            r_max * clear_frac,
+                        ),
+                        rclpy.parameter.Parameter(
+                            "emergency_stop_m",
+                            rclpy.Parameter.Type.DOUBLE,
+                            r_max * stop_frac,
+                        ),
+                    ]
+                )
+                self.get_logger().info(
+                    "Gap nav auto-config from /scan: "
+                    f"fov_deg={fov:.1f}, forward_lidar_angle_deg={center:.1f}, "
+                    f"range_max={r_max:.2f}m -> clear_distance_m={r_max * clear_frac:.2f}m, "
+                    f"emergency_stop_m={r_max * stop_frac:.2f}m"
+                )
+                self._autoconfig_done = True
         self._last_scan = msg
 
     def _classify_free(
