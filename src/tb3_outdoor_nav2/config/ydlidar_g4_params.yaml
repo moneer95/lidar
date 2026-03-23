@@ -1,4 +1,4 @@
-# YDLidar G4 – same limits as tb3_outdoor_nav2/config/ydlidar_g4_params.yaml
+# YDLidar G4 — same limits as repo config/ydlidar_g4_params.yaml (Nav2 + SLAM stack).
 # Root key: ydlidar_ros2_driver_node (matches ydlidar_ros2_driver ydlidar_launch.py).
 #
 # Geometry: 120° arc centered at 120° → angle_min=60, angle_max=180.
