@@ -89,6 +89,19 @@ def generate_launch_description():
                 ],
                 output="screen",
             ),
+            Node(
+                package="tb3_tools",
+                executable="tb3_odom_tf_broadcaster",
+                name="tb3_odom_tf_broadcaster",
+                output="screen",
+                parameters=[
+                    {
+                        "odom_topic": "/odom",
+                        "parent_frame": "odom",
+                        "child_frame": "base_link",
+                    }
+                ],
+            ),
             DeclareLaunchArgument(
                 "use_sim_time",
                 # Use Python-style booleans since Nav2 launch files use IfCondition(slam/use_sim_time).
