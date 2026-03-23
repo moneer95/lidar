@@ -69,12 +69,13 @@ def generate_launch_description():
         [
             DeclareLaunchArgument(
                 "use_sim_time",
-                default_value="false",
+                # Use Python-style booleans since Nav2 launch files use IfCondition(slam/use_sim_time).
+                default_value="False",
                 description="False on real TurtleBot3 + Jetson",
             ),
             DeclareLaunchArgument(
                 "slam",
-                default_value="true",
+                default_value="True",
                 description="Run slam_toolbox + Nav2 mapping stack",
             ),
             DeclareLaunchArgument(
