@@ -23,7 +23,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node, SetRemap
 
 
@@ -47,6 +47,10 @@ def generate_launch_description():
     bringup_py = os.path.join(nav2_bringup, "launch", "bringup_launch.py")
 
     invert_cmd_vel = LaunchConfiguration("invert_cmd_vel")
+    # Accept common CLI spellings like `invert_cmd_vel:=true` / `false`.
+    invert_cmd_vel_is_true = PythonExpression(
+        ["'", invert_cmd_vel, "' in ['true','True','1','yes','on']"]
+    )
 
     bringup_kwargs = {
         "slam": LaunchConfiguration("slam"),
@@ -89,11 +93,11 @@ def generate_launch_description():
                 description="If true: Nav2 publishes to /cmd_vel_raw; tb3_cmd_vel_invert negates and publishes /cmd_vel",
             ),
             GroupAction(
-                condition=UnlessCondition(invert_cmd_vel),
+                condition=UnlessCondition(invert_cmd_vel_is_true),
                 actions=[_bringup()],
             ),
             GroupAction(
-                condition=IfCondition(invert_cmd_vel),
+                condition=IfCondition(invert_cmd_vel_is_true),
                 actions=[
                     SetRemap(src="/cmd_vel", dst="/cmd_vel_raw"),
                     _bringup(),
@@ -102,7 +106,7 @@ def generate_launch_description():
             Node(
                 package="tb3_tools",
                 executable="tb3_cmd_vel_invert",
-                condition=IfCondition(invert_cmd_vel),
+                condition=IfCondition(invert_cmd_vel_is_true),
                 parameters=[
                     {
                         "input_topic": "/cmd_vel_raw",
