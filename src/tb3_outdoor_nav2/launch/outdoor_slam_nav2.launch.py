@@ -18,7 +18,7 @@
 
 import os
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
@@ -28,11 +28,22 @@ from launch_ros.actions import Node, SetRemap
 
 
 def generate_launch_description():
-    tb3_nav = get_package_share_directory("turtlebot3_navigation2")
     nav2_bringup = get_package_share_directory("nav2_bringup")
+    tb3_outdoor_share = get_package_share_directory("tb3_outdoor_nav2")
 
-    default_map = os.path.join(tb3_nav, "map", "map.yaml")
-    default_params = os.path.join(tb3_nav, "param", "humble", "burger.yaml")
+    tb3_nav = None
+    try:
+        tb3_nav = get_package_share_directory("turtlebot3_navigation2")
+    except PackageNotFoundError:
+        # Allow running without turtlebot3_navigation2 installed by falling back to nav2 defaults.
+        tb3_nav = None
+
+    if tb3_nav is not None:
+        default_map = os.path.join(tb3_nav, "map", "map.yaml")
+        default_params = os.path.join(tb3_nav, "param", "humble", "burger.yaml")
+    else:
+        default_map = os.path.join(tb3_outdoor_share, "config", "map.yaml")
+        default_params = os.path.join(nav2_bringup, "params", "nav2_params.yaml")
     bringup_py = os.path.join(nav2_bringup, "launch", "bringup_launch.py")
 
     invert_cmd_vel = LaunchConfiguration("invert_cmd_vel")
