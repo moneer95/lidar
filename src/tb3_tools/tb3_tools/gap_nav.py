@@ -63,7 +63,8 @@ class GapNav(Node):
         self.declare_parameter("enable_motors", True)
         self.declare_parameter("motor_power_service", "/motor_power")
         # If robot +X / cmd_vel forward is opposite real drive: set true to negate linear + angular.
-        self.declare_parameter("invert_drive", False)
+        # Default to True so "invert" behavior is enabled out-of-the-box.
+        self.declare_parameter("invert_drive", True)
 
         scan_topic = str(self.get_parameter("scan_topic").value)
         cmd_topic = str(self.get_parameter("cmd_vel_topic").value)
