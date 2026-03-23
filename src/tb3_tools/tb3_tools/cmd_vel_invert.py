@@ -45,7 +45,12 @@ def main() -> None:
         pass
     finally:
         z = Twist()
-        node._pub.publish(z)
+        # On shutdown the rclpy context may already be invalid; avoid raising.
+        try:
+            if rclpy.ok():
+                node._pub.publish(z)
+        except Exception:
+            pass
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
