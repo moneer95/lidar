@@ -16,25 +16,31 @@ class OdomTfBroadcaster(Node):
         super().__init__("tb3_odom_tf_broadcaster")
 
         self.declare_parameter("odom_topic", "/odom")
-        # Most TurtleBot3 stacks use parent "odom" and child "base_link".
-        self.declare_parameter("parent_frame", "odom")
-        self.declare_parameter("child_frame", "base_link")
+        # If empty, use values from the incoming /odom message:
+        # - msg.header.frame_id (typically "odom")
+        # - msg.child_frame_id (typically "base_footprint")
+        self.declare_parameter("parent_frame", "")
+        self.declare_parameter("child_frame", "")
 
         self._odom_topic = str(self.get_parameter("odom_topic").value)
-        self._parent_frame = str(self.get_parameter("parent_frame").value)
-        self._child_frame = str(self.get_parameter("child_frame").value)
+        self._parent_frame = str(self.get_parameter("parent_frame").value).strip()
+        self._child_frame = str(self.get_parameter("child_frame").value).strip()
 
         self._br = TransformBroadcaster(self)
         self.create_subscription(Odometry, self._odom_topic, self._cb, 10)
         self.get_logger().info(
-            f"Broadcasting TF {self._parent_frame} -> {self._child_frame} from {self._odom_topic}"
+            "Broadcasting TF from %s (%s -> %s); empty parent/child uses /odom message frames"
+            % (self._odom_topic, self._parent_frame or "<from msg>", self._child_frame or "<from msg>")
         )
 
     def _cb(self, msg: Odometry) -> None:
+        parent = self._parent_frame or msg.header.frame_id
+        child = self._child_frame or msg.child_frame_id
+
         t = TransformStamped()
         t.header.stamp = msg.header.stamp
-        t.header.frame_id = self._parent_frame
-        t.child_frame_id = self._child_frame
+        t.header.frame_id = parent
+        t.child_frame_id = child
 
         t.transform.translation.x = float(msg.pose.pose.position.x)
         t.transform.translation.y = float(msg.pose.pose.position.y)

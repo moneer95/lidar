@@ -97,8 +97,6 @@ def generate_launch_description():
                 parameters=[
                     {
                         "odom_topic": "/odom",
-                        "parent_frame": "odom",
-                        "child_frame": "base_link",
                     }
                 ],
             ),
