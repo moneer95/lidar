@@ -34,12 +34,6 @@ source_safe() {
   set -u
 }
 
-launch_bg() {
-  # Start command in its own process group so cleanup can stop all children.
-  setsid "$@" &
-  echo $!
-}
-
 stop_group() {
   local pid="$1"
   [[ -z "$pid" ]] && return 0
@@ -48,7 +42,7 @@ stop_group() {
 }
 
 ensure_tb3_nav_executable() {
-  if ros2 pkg executables tb3_tools 2>/dev/null | rg -q "tb3_nav"; then
+  if ros2 pkg executables tb3_tools 2>/dev/null | grep -q "tb3_nav"; then
     return 0
   fi
 
@@ -163,10 +157,12 @@ ensure_tb3_nav_executable
 source_safe "$LIDAR_WS/install/setup.bash"
 
 echo "Starting TurtleBot3 bringup (model=$MODEL)..."
-P_BRINGUP="$(launch_bg ros2 launch turtlebot3_bringup robot.launch.py)"
+setsid ros2 launch turtlebot3_bringup robot.launch.py &
+P_BRINGUP=$!
 
 echo "Starting YDLidar driver (params: $LIDAR_PARAMS_FILE)..."
-P_LIDAR="$(launch_bg ros2 launch ydlidar_ros2_driver ydlidar_launch.py params_file:="$LIDAR_PARAMS_FILE")"
+setsid ros2 launch ydlidar_ros2_driver ydlidar_launch.py params_file:="$LIDAR_PARAMS_FILE" &
+P_LIDAR=$!
 
 # Start live plot by default with borders matching LiDAR YAML limits.
 if [[ "${SHOW_PLOT:-1}" != "0" ]]; then
@@ -188,10 +184,11 @@ print((a0 + a1) / 2.0)
 PY
 )"
   echo "Starting scan plot (FOV=$PLOT_FOV_DEG°, center=$PLOT_CENTER_DEG°, max=$RANGE_MAX_M m)..."
-  P_PLOT="$(launch_bg ros2 run lidar_tools scan_plot_node --ros-args \
+  setsid ros2 run lidar_tools scan_plot_node --ros-args \
     -p fov_degrees:="$PLOT_FOV_DEG" \
     -p fov_center_deg:="$PLOT_CENTER_DEG" \
-    -p max_scan_range_m:="$RANGE_MAX_M")"
+    -p max_scan_range_m:="$RANGE_MAX_M" &
+  P_PLOT=$!
 else
   P_PLOT=""
 fi
