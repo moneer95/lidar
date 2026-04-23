@@ -229,72 +229,143 @@ python3 src/lidar_tools/lidar_tools/plot_scan.py scan_export.csv --fov 100 -o pl
   - `scan_plot_node` – live polar + time-series graphs from `/scan`
   - `plot_scan.py` – standalone script to plot from CSV
 - `src/tb3_tools/` – ROS2 package:
-  - `tb3_nav` – generic LiDAR-to-`/cmd_vel` runner with plugin algorithms from `src/algorithms/`
-  - `tb3_arrow_teleop` – keyboard teleop
+  - `tb3_nav` – generic LiDAR-to-`/cmd_vel` runner; loads plugins from `src/algorithms/`
+  - `tb3_arrow_teleop` – keyboard teleop (Burger limits)
+- `src/algorithms/` – navigation plugins (your code lives here)
+- `config/ydlidar_g4_params.yaml` – YDLidar G4 driver parameters
+- `config/tb3_nav_template.yaml` – `tb3_nav` + shared `algo.*` tuning
+- `start_robot.sh` – one command: bringup, YDLidar, optional plot, `tb3_nav` or teleop
 - `README.md` – this file
 
-## Generic navigation algorithm runner (`tb3_nav`)
+---
 
-`tb3_nav` is the generic runner for LiDAR-to-`/cmd_vel`.
-Algorithms live in `src/algorithms/` as separate plugin files.
+## Onboarding: TurtleBot3 + YDLidar + your algorithm
 
-To add an algorithm:
+### What runs where
 
-1. Create a new file in `src/algorithms/` (for example `wall_follow.py`).
-2. Implement a class that inherits `NavigationAlgorithm` from `tb3_tools.algorithm_api`.
-3. Set a unique class attribute `name` (used for discovery and auto-selection order).
-4. Implement:
-   - `configure(self, params)` for plugin params (`algo.*` from YAML)
-   - `compute(self, obs)` to return `VelocityCommand`
+| Piece | Role |
+|--------|------|
+| `turtlebot3_bringup` | Base, wheels, IMU, etc. (started by `start_robot.sh`) |
+| `ydlidar_ros2_driver` | Publishes `sensor_msgs/LaserScan` on `/scan` |
+| `tb3_nav` | Subscribes to `/scan`, loads **one** plugin from `src/algorithms/`, publishes `geometry_msgs/Twist` on `/cmd_vel` |
+| Your plugin | Pure logic: `LidarObservation` → `VelocityCommand` (no ROS types inside the algorithm) |
 
-The plugin receives ROS-agnostic inputs (`LidarObservation`) and outputs (`VelocityCommand`),
-so developers do not need to handle ROS2 `LaserScan`/`Twist`, topics, QoS, or motor service logic.
+You do **not** edit `nav_runner.py` for normal behavior—only add or change files under `src/algorithms/`.
 
-Working reference implementation:
+### One command to run the stack
 
-- `src/algorithms/example_reactive.py`
-  - uses shared `algo.*` params from `config/tb3_nav_template.yaml`
-  - demonstrates: read LiDAR observation, pick closest obstacle in FOV, output command
+From the project root (e.g. `~/Desktop/lidar`):
 
-You do **not** need to set `algorithm` in YAML. If omitted, `tb3_nav` auto-selects the first discovered plugin.
-Common `algo.*` defaults are injected automatically in code, and YAML can override them.
+```bash
+chmod +x start_robot.sh   # once
+./start_robot.sh
+```
 
-Run with params file:
+Defaults: **nav** mode, **Burger** model, LiDAR config `config/ydlidar_g4_params.yaml`, nav config `config/tb3_nav_template.yaml`, live plot on (disable with `SHOW_PLOT=0`).
+
+Other examples:
+
+```bash
+./start_robot.sh                    # nav + burger (default)
+./start_robot.sh teleop             # keyboard teleop instead of nav
+./start_robot.sh nav burger /path/to/custom_tb3_nav.yaml
+```
+
+**Stop:** `Ctrl+C` in the same terminal (stops background bringup, lidar, plot).
+
+**Environment overrides (optional):**
+
+```bash
+YDLIDAR_WS=~/ros2_ws LIDAR_WS=~/Desktop/lidar ./start_robot.sh
+LIDAR_PARAMS_FILE=~/Desktop/lidar/config/ydlidar_g4_params.yaml ./start_robot.sh
+TB3_NAV_PARAMS_FILE=~/Desktop/lidar/config/tb3_nav_template.yaml ./start_robot.sh
+```
+
+### TurtleBot3 lidar vs YDLidar (important)
+
+`start_robot.sh` sets **`LDS_MODEL=none`** by default so the **stock TurtleBot3 LDS node does not open `/dev/ttyUSB0`**. If both that node and the YDLidar driver use the same USB serial port, you get checksum errors and the YDLidar node may crash.
+
+- **External YDLidar only (this setup):** keep default `LDS_MODEL=none` (or leave unset).
+- **Factory TB3 lidar on the stack:** set `LDS_MODEL=LDS-01` and **do not** use YDLidar on the same device path, or use two separate USB devices.
+
+Build note: the script can auto-build `~/ros2_ws` and this workspace if `install/setup.bash` is missing.
+
+### Adding your own navigation algorithm
+
+**Short copy-paste checklist:** [**docs/INTEGRATE_ALGORITHM.md**](docs/INTEGRATE_ALGORITHM.md) (5 steps).
+
+1. **Create a new file** in `src/algorithms/`, e.g. `my_planner.py`.
+
+2. **Implement a plugin class:**
+
+   - Import from `tb3_tools.algorithm_api`: `NavigationAlgorithm`, `LidarObservation`, `VelocityCommand`.
+   - Set **`name = "my_planner"`** (unique string; used for discovery and optional YAML selection).
+   - **`configure(self, params: dict)`** – read tunables; keys are the part after `algo.` in YAML (e.g. `linear_x` from `algo.linear_x`).
+   - **`compute(self, obs: LidarObservation) -> VelocityCommand`** – return `VelocityCommand(linear_x_m_s=..., angular_z_rad_s=...)`. Use `obs.ranges_m` and `obs.angles_rad` (same index).
+
+3. **Reference example:** `src/algorithms/example_reactive.py` (reactive, FOV, safety distance).
+
+4. **Build** after changes:
+
+   ```bash
+   cd ~/Desktop/lidar
+   source /opt/ros/humble/setup.bash
+   colcon build --symlink-install
+   source install/setup.bash
+   ```
+
+### Choosing which algorithm runs
+
+Plugins are loaded from `src/algorithms/*.py` (see `tb3_tools/algorithm_loader.py`).
+
+- If **only one** plugin class with a non-empty `name` exists, it is used automatically.
+- If **several** plugins exist, `tb3_nav` picks the **first in alphabetical order by `name`**, unless you set explicitly in `config/tb3_nav_template.yaml` under `tb3_nav.ros__parameters`:
+
+  ```yaml
+  algorithm: "my_planner"
+  ```
+
+  Use the same string as the class attribute `name`.
+
+### Shared parameters (`config/tb3_nav_template.yaml`)
+
+`tb3_nav` reads **runner** settings (`scan_topic`, `cmd_vel_topic`, `control_hz`, `enable_motors`, `invert_drive`, …) and passes **`algo.*`** into your `configure()` dict.
+
+Default `algo.*` values are also set in code (`nav_runner.py`) if missing; YAML **overrides** them.
+
+Example tunables used by `example_reactive` (tune for slower / gentler motion):
+
+| YAML key | Meaning |
+|----------|--------|
+| `algo.linear_x` | Forward speed (m/s) |
+| `algo.max_angular_z` | Max yaw rate (rad/s) |
+| `algo.kp` | Turn gain toward open space / away from obstacles |
+| `algo.safety_distance_m` | Below this range, slow / react |
+| `algo.fov_deg` / `algo.forward_lidar_angle_deg` | Sectors in **robot** frame (see example code) |
+
+### Run `tb3_nav` by hand (same as the script)
 
 ```bash
 source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
 source ~/Desktop/lidar/install/setup.bash
-ros2 run tb3_tools tb3_nav --ros-args --params-file /path/to/your_tb3_nav.yaml
+ros2 run tb3_tools tb3_nav --ros-args --params-file ~/Desktop/lidar/config/tb3_nav_template.yaml
 ```
 
-One-command robot start helper:
+### Algorithm API (quick reference)
 
-```bash
-./start_robot.sh teleop burger
-./start_robot.sh nav burger
-./start_robot.sh nav burger ~/Desktop/lidar/config/tb3_nav_template.yaml
-```
+- **`LidarObservation`:** `ranges_m`, `angles_rad` (radians, laser frame), `range_min_m`, `range_max_m`, etc.
+- **`VelocityCommand`:** `linear_x_m_s`, `angular_z_rad_s` (robot base frame; `tb3_nav` can invert via `invert_drive` in YAML).
+- **Import path:** `from tb3_tools.algorithm_api import ...` (package `tb3_tools` must be built and sourced).
 
-`start_robot.sh` now reads params from files:
+### LiDAR live plot (optional)
 
-```bash
-# LiDAR params file (default)
-config/ydlidar_g4_params.yaml
-
-# Example TB3 nav params file
-config/tb3_nav_template.yaml
-
-# Override LiDAR params file path if needed
-LIDAR_PARAMS_FILE=~/Desktop/lidar/config/ydlidar_g4_params.yaml ./start_robot.sh teleop burger
-
-# Override TB3 nav params file path if needed
-TB3_NAV_PARAMS_FILE=~/Desktop/lidar/config/tb3_nav_template.yaml ./start_robot.sh nav burger
-```
-
-If you need strict file-driven behavior, set all nav parameters in your YAML file.
+`start_robot.sh` starts `scan_plot_node` by default with FOV/range derived from `config/ydlidar_g4_params.yaml`. Disable: `SHOW_PLOT=0 ./start_robot.sh`.
 
 ## Troubleshooting
 
 - **No `/scan`:** Check port and baudrate; ensure the driver launch uses the G4 config.
 - **Permission denied:** Use the udev rule above and replug the USB.
 - **Wrong angles/ranges:** Adjust `angle_min`, `angle_max`, `range_max` in the driver’s YAML for G4.
+- **YDLidar checksum errors / driver crash (exit -11):** Only one process may use a given serial port. Use `LDS_MODEL=none` in `start_robot.sh` when the external YDLidar is on `/dev/ttyUSB0`, or move one device to another port. If you see *Real point count > fixed point count*, try `fixed_resolution: false` in `config/ydlidar_g4_params.yaml` (already the default in this repo).
+- **`tb3_nav` not found or old code running:** `colcon build --symlink-install` in this workspace, then `source install/setup.bash`.
