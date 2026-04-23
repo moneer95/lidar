@@ -140,11 +140,10 @@ class Tb3NavRunner(Node):
 
     def _collect_algorithm_params(self) -> dict:
         """Collect algorithm config from params with `algo.` prefix."""
-        names = self.list_parameters(["algo"], 10).names
         cfg = dict(DEFAULT_ALGO_PARAMS)
-        for full_name in names:
-            key = full_name.removeprefix("algo.")
-            cfg[key] = self.get_parameter(full_name).value
+        prefixed = self.get_parameters_by_prefix("algo")
+        for key, param in prefixed.items():
+            cfg[key] = param.value
         return cfg
 
     def _resolve_algorithms_dir(self) -> Path:
