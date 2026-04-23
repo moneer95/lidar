@@ -26,6 +26,14 @@ LIDAR_PARAMS_FILE="${LIDAR_PARAMS_FILE:-$LIDAR_WS/config/ydlidar_g4_params.yaml}
 TB3_NAV_PARAMS_FILE="${TB3_NAV_PARAMS_FILE:-$LIDAR_WS/config/tb3_nav_template.yaml}"
 CLI_TB3_NAV_PARAMS_FILE="${3:-}"
 
+source_safe() {
+  # ROS setup scripts may reference unset vars; temporarily disable nounset.
+  set +u
+  # shellcheck disable=SC1090
+  source "$1"
+  set -u
+}
+
 get_lidar_param_or_default() {
   local key="$1"
   local default_value="$2"
@@ -80,7 +88,7 @@ if [[ ! -f "$YDLIDAR_WS/install/setup.bash" ]]; then
   echo "Auto-building ydlidar workspace at $YDLIDAR_WS ..."
   (
     cd "$YDLIDAR_WS"
-    source /opt/ros/humble/setup.bash
+    source_safe /opt/ros/humble/setup.bash
     colcon build --symlink-install
   )
   if [[ ! -f "$YDLIDAR_WS/install/setup.bash" ]]; then
@@ -95,7 +103,7 @@ if [[ ! -f "$LIDAR_WS/install/setup.bash" ]]; then
   echo "Auto-building lidar workspace at $LIDAR_WS ..."
   (
     cd "$LIDAR_WS"
-    source /opt/ros/humble/setup.bash
+    source_safe /opt/ros/humble/setup.bash
     colcon build --symlink-install
   )
 fi
@@ -116,9 +124,9 @@ if [[ "$MODE" == "nav" ]]; then
   fi
 fi
 
-source /opt/ros/humble/setup.bash
-source "$YDLIDAR_WS/install/setup.bash"
-source "$LIDAR_WS/install/setup.bash"
+source_safe /opt/ros/humble/setup.bash
+source_safe "$YDLIDAR_WS/install/setup.bash"
+source_safe "$LIDAR_WS/install/setup.bash"
 
 export TURTLEBOT3_MODEL="$MODEL"
 
