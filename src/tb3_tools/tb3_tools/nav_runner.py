@@ -34,14 +34,14 @@ class Tb3NavRunner(Node):
     def __init__(self) -> None:
         # Allow algorithm-specific params from --params-file without pre-declaration.
         super().__init__("tb3_nav", automatically_declare_parameters_from_overrides=True)
-        self.declare_parameter("algorithm", "")
-        self.declare_parameter("scan_topic", "/scan")
-        self.declare_parameter("cmd_vel_topic", "/cmd_vel")
-        self.declare_parameter("control_hz", 20.0)
-        self.declare_parameter("enable_motors", True)
-        self.declare_parameter("motor_power_service", "/motor_power")
-        self.declare_parameter("invert_drive", True)
-        self.declare_parameter("algorithms_dir", "")
+        self._declare_if_missing("algorithm", "")
+        self._declare_if_missing("scan_topic", "/scan")
+        self._declare_if_missing("cmd_vel_topic", "/cmd_vel")
+        self._declare_if_missing("control_hz", 20.0)
+        self._declare_if_missing("enable_motors", True)
+        self._declare_if_missing("motor_power_service", "/motor_power")
+        self._declare_if_missing("invert_drive", True)
+        self._declare_if_missing("algorithms_dir", "")
 
         algorithms_dir = self._resolve_algorithms_dir()
         self.get_logger().info(f"Loading algorithms from: {algorithms_dir}")
@@ -159,6 +159,11 @@ class Tb3NavRunner(Node):
 
         # Workspace default: <repo>/src/algorithms
         return Path(__file__).resolve().parents[2] / "algorithms"
+
+    def _declare_if_missing(self, name: str, default_value) -> None:
+        """Declare parameter only when it wasn't already declared by overrides."""
+        if not self.has_parameter(name):
+            self.declare_parameter(name, default_value)
 
 
 def main() -> None:
