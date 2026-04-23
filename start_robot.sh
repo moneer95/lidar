@@ -15,6 +15,7 @@
 #   LIDAR_PARAMS_FILE=~/Desktop/lidar/config/ydlidar_g4_params.yaml
 #   TB3_NAV_PARAMS_FILE=~/Desktop/lidar/config/tb3_nav_template.yaml
 #   SHOW_PLOT=1
+#   LDS_MODEL=none   (default below: use external YDLidar only; set LDS_MODEL=LDS-01 if you use the TB3 stack lidar)
 
 set -euo pipefail
 
@@ -149,8 +150,9 @@ source_safe "$YDLIDAR_WS/install/setup.bash"
 source_safe "$LIDAR_WS/install/setup.bash"
 
 export TURTLEBOT3_MODEL="$MODEL"
-# Some turtlebot3 bringup launch files require LDS_MODEL env.
-export LDS_MODEL="${LDS_MODEL:-LDS-01}"
+# Do not start the stock TurtleBot3 LDS on /dev/ttyUSB0 when YDLidar uses the same port.
+# (Two serial readers → checksum errors and driver crash.) Override with LDS_MODEL=LDS-01 if you use the factory lidar.
+export LDS_MODEL="${LDS_MODEL:-none}"
 
 # Ensure latest nav executable exists after refactors.
 ensure_tb3_nav_executable
