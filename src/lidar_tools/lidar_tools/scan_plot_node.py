@@ -94,6 +94,29 @@ def _draw_visible_area_border(ax, fov_degrees, fov_center_rad, radius_m):
     )
 
 
+def _draw_visible_area_fill(ax, fov_degrees, fov_center_rad, radius_m):
+    """Draw a light fill for the full sensor coverage area."""
+    if radius_m <= 0:
+        return
+
+    import numpy as np
+
+    if fov_degrees >= 360.0:
+        theta = np.linspace(0, 2 * math.pi, 360)
+        xs = radius_m * np.cos(theta)
+        ys = radius_m * np.sin(theta)
+        ax.fill(xs, ys, color="orange", alpha=0.08, zorder=1)
+        return
+
+    half = math.radians(fov_degrees / 2.0)
+    a0 = fov_center_rad - half
+    a1 = fov_center_rad + half
+    arc = np.linspace(a0, a1, 260)
+    xs = [0.0] + list(radius_m * np.cos(arc)) + [0.0]
+    ys = [0.0] + list(radius_m * np.sin(arc)) + [0.0]
+    ax.fill(xs, ys, color="orange", alpha=0.08, zorder=1)
+
+
 class ScanPlotNode(Node):
     def __init__(self):
         super().__init__("scan_plot_node")
@@ -103,12 +126,14 @@ class ScanPlotNode(Node):
         self.declare_parameter("fov_center_deg", 0.0, _PARAM_NUM)
         self.declare_parameter("max_range_m", 5.0, _PARAM_NUM)
         self.declare_parameter("max_scan_range_m", 0.0, _PARAM_NUM)
+        self.declare_parameter("show_full_scan_area", True)
         fov = float(self.get_parameter("fov_degrees").value)
         self.fov_degrees = fov if fov > 0 else 360.0
         self.half_fov_rad = math.radians(self.fov_degrees / 2.0)
         self.fov_center_rad = math.radians(float(self.get_parameter("fov_center_deg").value))
         self.max_range_m = float(self.get_parameter("max_range_m").value)
         self.max_scan_range_m = float(self.get_parameter("max_scan_range_m").value)
+        self.show_full_scan_area = bool(self.get_parameter("show_full_scan_area").value)
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -169,11 +194,22 @@ class ScanPlotNode(Node):
 
         self.ax.clear()
 
-        # Visible-area border radius follows configured filter range if present.
-        # Otherwise it follows current zoom/data cap.
+        # Sensor coverage radius: use configured scan cap if present, else scan message range_max.
+        sensor_radius = (
+            self.max_scan_range_m if self.max_scan_range_m > 0 else float(msg.range_max)
+        )
         data_max = max(math.hypot(x, y) for x, y in zip(xs, ys)) if xs else 2.0
-        lim = max(0.5, min(data_max * 1.15, self.max_range_m))
-        visible_radius = self.max_scan_range_m if self.max_scan_range_m > 0 else lim
+        if self.show_full_scan_area and sensor_radius > 0:
+            lim = max(0.5, min(sensor_radius * 1.15, self.max_range_m))
+        else:
+            lim = max(0.5, min(data_max * 1.15, self.max_range_m))
+        visible_radius = sensor_radius if sensor_radius > 0 else lim
+        _draw_visible_area_fill(
+            self.ax,
+            self.fov_degrees,
+            self.fov_center_rad,
+            visible_radius,
+        )
         _draw_visible_area_border(
             self.ax,
             self.fov_degrees,
