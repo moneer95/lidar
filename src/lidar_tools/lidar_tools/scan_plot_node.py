@@ -163,6 +163,7 @@ class ScanPlotNode(Node):
         self.fig, self.ax = plt.subplots(figsize=(9, 9))
         self.plt.ion()
         self.plt.show()
+        self._draw_idle_frame("Waiting for /scan data...")
 
     def scan_callback(self, msg):
         self.latest_scan = msg
@@ -170,6 +171,7 @@ class ScanPlotNode(Node):
 
     def redraw(self):
         if self.latest_scan is None:
+            self._draw_idle_frame("Waiting for /scan data...")
             return
 
         msg = self.latest_scan
@@ -249,6 +251,45 @@ class ScanPlotNode(Node):
         self.ax.set_xlabel("X (m)", fontsize=11)
         self.ax.set_ylabel("Y (m)", fontsize=11)
         self.ax.set_title("Top-down map — LiDAR at (0, 0), obstacles at real X,Y coordinates", fontsize=11)
+        self.ax.grid(True, alpha=0.4)
+        self.ax.axhline(0, color="gray", linewidth=0.5, alpha=0.6)
+        self.ax.axvline(0, color="gray", linewidth=0.5, alpha=0.6)
+
+        self.fig.tight_layout()
+        self.plt.draw()
+        self.plt.pause(0.01)
+
+    def _draw_idle_frame(self, title):
+        """Always draw a visible reference frame even without scan points."""
+        self.ax.clear()
+        radius = self.max_scan_range_m if self.max_scan_range_m > 0 else 2.0
+        lim = max(0.5, min(radius * 1.15, self.max_range_m))
+
+        _draw_visible_area_fill(
+            self.ax,
+            self.fov_degrees,
+            self.fov_center_rad,
+            radius,
+        )
+        _draw_visible_area_border(
+            self.ax,
+            self.fov_degrees,
+            self.fov_center_rad,
+            radius,
+        )
+        _draw_distance_rings(self.ax, lim)
+
+        # LiDAR center and forward marker.
+        self.ax.scatter([0], [0], s=200, marker="^", c="red", edgecolors="black", linewidths=2, zorder=10)
+        self.ax.plot(0, 0, "k+", markersize=12, markeredgewidth=2, zorder=10)
+        self.ax.arrow(0, 0, 0.35, 0, head_width=0.06, head_length=0.04, fc="red", ec="red", zorder=9)
+
+        self.ax.set_xlim(-lim, lim)
+        self.ax.set_ylim(-lim, lim)
+        self.ax.set_aspect("equal", adjustable="box")
+        self.ax.set_xlabel("X (m)", fontsize=11)
+        self.ax.set_ylabel("Y (m)", fontsize=11)
+        self.ax.set_title(title, fontsize=11)
         self.ax.grid(True, alpha=0.4)
         self.ax.axhline(0, color="gray", linewidth=0.5, alpha=0.6)
         self.ax.axvline(0, color="gray", linewidth=0.5, alpha=0.6)
