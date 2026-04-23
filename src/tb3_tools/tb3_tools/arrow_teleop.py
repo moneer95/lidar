@@ -20,8 +20,6 @@ if os.name != "nt":
 
 BURGER_MAX_LIN_VEL = 0.22
 BURGER_MAX_ANG_VEL = 2.84
-WAFFLE_MAX_LIN_VEL = 0.26
-WAFFLE_MAX_ANG_VEL = 1.82
 
 LIN_VEL_STEP_SIZE = 0.01
 ANG_VEL_STEP_SIZE = 0.1
@@ -36,8 +34,8 @@ TurtleBot3 arrow teleop (tb3_tools)
 
   space : stop (zero velocity)
 
-  Same limits as turtlebot3_teleop; set TURTLEBOT3_MODEL=burger or waffle.
-  On startup we call /motor_power on so wheels can move (like tb3_forward_test).
+  Uses TurtleBot3 Burger limits.
+  On startup we call /motor_power on so wheels can move.
 
 Ctrl-C to quit
 """
@@ -47,16 +45,12 @@ def clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
-def lin_limit(model: str, v: float) -> float:
-    if model == "burger":
-        return clamp(v, -BURGER_MAX_LIN_VEL, BURGER_MAX_LIN_VEL)
-    return clamp(v, -WAFFLE_MAX_LIN_VEL, WAFFLE_MAX_LIN_VEL)
+def lin_limit(v: float) -> float:
+    return clamp(v, -BURGER_MAX_LIN_VEL, BURGER_MAX_LIN_VEL)
 
 
-def ang_limit(model: str, v: float) -> float:
-    if model == "burger":
-        return clamp(v, -BURGER_MAX_ANG_VEL, BURGER_MAX_ANG_VEL)
-    return clamp(v, -WAFFLE_MAX_ANG_VEL, WAFFLE_MAX_ANG_VEL)
+def ang_limit(v: float) -> float:
+    return clamp(v, -BURGER_MAX_ANG_VEL, BURGER_MAX_ANG_VEL)
 
 
 def make_simple_profile(output_vel: float, input_vel: float, slop: float) -> float:
@@ -121,12 +115,7 @@ def main() -> None:
     if os.name != "nt":
         settings = termios.tcgetattr(sys.stdin)
 
-    model = os.environ.get("TURTLEBOT3_MODEL", "burger").strip().lower()
-    if model not in ("burger", "waffle", "waffle_pi"):
-        print("Set TURTLEBOT3_MODEL to burger, waffle, or waffle_pi.", file=sys.stderr)
-        sys.exit(1)
-    if model == "waffle_pi":
-        model = "waffle"
+    model = "burger"
 
     rclpy.init()
     node = Node("tb3_arrow_teleop")
@@ -159,19 +148,19 @@ def main() -> None:
         while rclpy.ok():
             key = read_key(settings)
             if key == "UP":
-                target_linear = lin_limit(model, target_linear + LIN_VEL_STEP_SIZE)
+                target_linear = lin_limit(target_linear + LIN_VEL_STEP_SIZE)
                 status += 1
                 print(f"linear={target_linear:.3f}\tangular={target_angular:.3f}")
             elif key == "DOWN":
-                target_linear = lin_limit(model, target_linear - LIN_VEL_STEP_SIZE)
+                target_linear = lin_limit(target_linear - LIN_VEL_STEP_SIZE)
                 status += 1
                 print(f"linear={target_linear:.3f}\tangular={target_angular:.3f}")
             elif key == "LEFT":
-                target_angular = ang_limit(model, target_angular + ANG_VEL_STEP_SIZE)
+                target_angular = ang_limit(target_angular + ANG_VEL_STEP_SIZE)
                 status += 1
                 print(f"linear={target_linear:.3f}\tangular={target_angular:.3f}")
             elif key == "RIGHT":
-                target_angular = ang_limit(model, target_angular - ANG_VEL_STEP_SIZE)
+                target_angular = ang_limit(target_angular - ANG_VEL_STEP_SIZE)
                 status += 1
                 print(f"linear={target_linear:.3f}\tangular={target_angular:.3f}")
             elif key == " ":

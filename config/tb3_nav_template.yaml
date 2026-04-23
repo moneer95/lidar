@@ -1,0 +1,18 @@
+tb3_nav:
+  ros__parameters:
+    # Runner I/O (handled by tb3_nav, not by plugin code)
+    scan_topic: "/scan"
+    cmd_vel_topic: "/cmd_vel"
+    control_hz: 20.0
+    enable_motors: true
+    motor_power_service: "/motor_power"
+    invert_drive: true
+
+    # Plugin-specific params passed to configure() as a dictionary:
+    # algo.<key>: <value>
+    algo.linear_x: 0.05
+    algo.max_angular_z: 0.8
+    algo.kp: 1.0
+    algo.safety_distance_m: 0.25
+    algo.fov_deg: 120.0
+    algo.forward_lidar_angle_deg: 120.0

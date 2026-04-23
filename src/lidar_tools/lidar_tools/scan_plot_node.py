@@ -34,6 +34,66 @@ def _draw_distance_rings(ax, r_max, step=1.0):
             ax.text(r + 0.08, 0, f"{r}m", fontsize=8, alpha=0.7)
 
 
+def _draw_visible_area_border(ax, fov_degrees, fov_center_rad, radius_m):
+    """Draw the currently configured visible area boundary."""
+    if radius_m <= 0:
+        return
+
+    import numpy as np
+
+    border_color = "darkorange"
+    border_lw = 2.0
+    border_alpha = 0.95
+
+    # Full view: draw one circle border.
+    if fov_degrees >= 360.0:
+        theta = np.linspace(0, 2 * math.pi, 300)
+        ax.plot(
+            radius_m * np.cos(theta),
+            radius_m * np.sin(theta),
+            color=border_color,
+            linewidth=border_lw,
+            alpha=border_alpha,
+            linestyle="--",
+            zorder=6,
+        )
+        return
+
+    half = math.radians(fov_degrees / 2.0)
+    a0 = fov_center_rad - half
+    a1 = fov_center_rad + half
+
+    # Two radial borders.
+    ax.plot(
+        [0, radius_m * math.cos(a0)],
+        [0, radius_m * math.sin(a0)],
+        color=border_color,
+        linewidth=border_lw,
+        alpha=border_alpha,
+        zorder=6,
+    )
+    ax.plot(
+        [0, radius_m * math.cos(a1)],
+        [0, radius_m * math.sin(a1)],
+        color=border_color,
+        linewidth=border_lw,
+        alpha=border_alpha,
+        zorder=6,
+    )
+
+    # Outer arc border between FOV edges.
+    arc = np.linspace(a0, a1, 220)
+    ax.plot(
+        radius_m * np.cos(arc),
+        radius_m * np.sin(arc),
+        color=border_color,
+        linewidth=border_lw,
+        alpha=border_alpha,
+        linestyle="--",
+        zorder=6,
+    )
+
+
 class ScanPlotNode(Node):
     def __init__(self):
         super().__init__("scan_plot_node")
@@ -109,17 +169,31 @@ class ScanPlotNode(Node):
 
         self.ax.clear()
 
+        # Visible-area border radius follows configured filter range if present.
+        # Otherwise it follows current zoom/data cap.
+        data_max = max(math.hypot(x, y) for x, y in zip(xs, ys)) if xs else 2.0
+        lim = max(0.5, min(data_max * 1.15, self.max_range_m))
+        visible_radius = self.max_scan_range_m if self.max_scan_range_m > 0 else lim
+        _draw_visible_area_border(
+            self.ax,
+            self.fov_degrees,
+            self.fov_center_rad,
+            visible_radius,
+        )
+
         if not xs:
             self.ax.set_title("Top-down map (X, Y in m) — no valid points")
             self.ax.set_xlabel("X (m)")
             self.ax.set_ylabel("Y (m)")
+            self.ax.set_xlim(-lim, lim)
+            self.ax.set_ylim(-lim, lim)
+            self.ax.set_aspect("equal", adjustable="box")
+            self.ax.grid(True, alpha=0.4)
+            self.ax.axhline(0, color="gray", linewidth=0.5, alpha=0.6)
+            self.ax.axvline(0, color="gray", linewidth=0.5, alpha=0.6)
             self.plt.draw()
             self.plt.pause(0.01)
             return
-
-        # Zoom: view fits data + padding, cap at max_range_m
-        data_max = max(math.hypot(x, y) for x, y in zip(xs, ys)) if xs else 2.0
-        lim = max(0.5, min(data_max * 1.15, self.max_range_m))
 
         # All points at their real (X, Y) position in meters
         self.ax.scatter(xs, ys, s=6, c="steelblue", alpha=0.85, edgecolors="none")

@@ -228,7 +228,70 @@ python3 src/lidar_tools/lidar_tools/plot_scan.py scan_export.csv --fov 100 -o pl
   - `export_scan_node` – writes one scan to CSV (angle_deg, range_m) then exits
   - `scan_plot_node` – live polar + time-series graphs from `/scan`
   - `plot_scan.py` – standalone script to plot from CSV
+- `src/tb3_tools/` – ROS2 package:
+  - `tb3_nav` – generic LiDAR-to-`/cmd_vel` runner with plugin algorithms from `src/algorithms/`
+  - `tb3_arrow_teleop` – keyboard teleop
 - `README.md` – this file
+
+## Generic navigation algorithm runner (`tb3_nav`)
+
+`tb3_nav` is the generic runner for LiDAR-to-`/cmd_vel`.
+Algorithms live in `src/algorithms/` as separate plugin files.
+
+To add an algorithm:
+
+1. Create a new file in `src/algorithms/` (for example `wall_follow.py`).
+2. Implement a class that inherits `NavigationAlgorithm` from `tb3_tools.algorithm_api`.
+3. Set a unique class attribute `name` (used for discovery and auto-selection order).
+4. Implement:
+   - `configure(self, params)` for plugin params (`algo.*` from YAML)
+   - `compute(self, obs)` to return `VelocityCommand`
+
+The plugin receives ROS-agnostic inputs (`LidarObservation`) and outputs (`VelocityCommand`),
+so developers do not need to handle ROS2 `LaserScan`/`Twist`, topics, QoS, or motor service logic.
+
+Working reference implementation:
+
+- `src/algorithms/example_reactive.py`
+  - uses shared `algo.*` params from `config/tb3_nav_template.yaml`
+  - demonstrates: read LiDAR observation, pick closest obstacle in FOV, output command
+
+You do **not** need to set `algorithm` in YAML. If omitted, `tb3_nav` auto-selects the first discovered plugin.
+Common `algo.*` defaults are injected automatically in code, and YAML can override them.
+
+Run with params file:
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/Desktop/lidar/install/setup.bash
+ros2 run tb3_tools tb3_nav --ros-args --params-file /path/to/your_tb3_nav.yaml
+```
+
+One-command robot start helper:
+
+```bash
+./start_robot.sh teleop burger
+./start_robot.sh nav burger
+./start_robot.sh nav burger ~/Desktop/lidar/config/tb3_nav_template.yaml
+```
+
+`start_robot.sh` now reads params from files:
+
+```bash
+# LiDAR params file (default)
+config/ydlidar_g4_params.yaml
+
+# Example TB3 nav params file
+config/tb3_nav_template.yaml
+
+# Override LiDAR params file path if needed
+LIDAR_PARAMS_FILE=~/Desktop/lidar/config/ydlidar_g4_params.yaml ./start_robot.sh teleop burger
+
+# Override TB3 nav params file path if needed
+TB3_NAV_PARAMS_FILE=~/Desktop/lidar/config/tb3_nav_template.yaml ./start_robot.sh nav burger
+```
+
+If you need strict file-driven behavior, set all nav parameters in your YAML file.
 
 ## Troubleshooting
 
