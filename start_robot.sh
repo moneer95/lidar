@@ -34,6 +34,32 @@ source_safe() {
   set -u
 }
 
+launch_bg() {
+  # Start command in its own process group so cleanup can stop all children.
+  setsid "$@" &
+  echo $!
+}
+
+stop_group() {
+  local pid="$1"
+  [[ -z "$pid" ]] && return 0
+  # Negative PID targets the process group.
+  kill -TERM -- "-$pid" 2>/dev/null || true
+}
+
+ensure_tb3_nav_executable() {
+  if ros2 pkg executables tb3_tools 2>/dev/null | rg -q "tb3_nav"; then
+    return 0
+  fi
+
+  echo "tb3_nav executable not found. Rebuilding tb3_tools ..."
+  (
+    cd "$LIDAR_WS"
+    source_safe /opt/ros/humble/setup.bash
+    colcon build --packages-select tb3_tools --symlink-install
+  )
+}
+
 get_lidar_param_or_default() {
   local key="$1"
   local default_value="$2"
@@ -129,14 +155,18 @@ source_safe "$YDLIDAR_WS/install/setup.bash"
 source_safe "$LIDAR_WS/install/setup.bash"
 
 export TURTLEBOT3_MODEL="$MODEL"
+# Some turtlebot3 bringup launch files require LDS_MODEL env.
+export LDS_MODEL="${LDS_MODEL:-LDS-01}"
+
+# Ensure latest nav executable exists after refactors.
+ensure_tb3_nav_executable
+source_safe "$LIDAR_WS/install/setup.bash"
 
 echo "Starting TurtleBot3 bringup (model=$MODEL)..."
-ros2 launch turtlebot3_bringup robot.launch.py &
-P_BRINGUP=$!
+P_BRINGUP="$(launch_bg ros2 launch turtlebot3_bringup robot.launch.py)"
 
 echo "Starting YDLidar driver (params: $LIDAR_PARAMS_FILE)..."
-ros2 launch ydlidar_ros2_driver ydlidar_launch.py params_file:="$LIDAR_PARAMS_FILE" &
-P_LIDAR=$!
+P_LIDAR="$(launch_bg ros2 launch ydlidar_ros2_driver ydlidar_launch.py params_file:="$LIDAR_PARAMS_FILE")"
 
 # Start live plot by default with borders matching LiDAR YAML limits.
 if [[ "${SHOW_PLOT:-1}" != "0" ]]; then
@@ -158,11 +188,10 @@ print((a0 + a1) / 2.0)
 PY
 )"
   echo "Starting scan plot (FOV=$PLOT_FOV_DEG°, center=$PLOT_CENTER_DEG°, max=$RANGE_MAX_M m)..."
-  ros2 run lidar_tools scan_plot_node --ros-args \
+  P_PLOT="$(launch_bg ros2 run lidar_tools scan_plot_node --ros-args \
     -p fov_degrees:="$PLOT_FOV_DEG" \
     -p fov_center_deg:="$PLOT_CENTER_DEG" \
-    -p max_scan_range_m:="$RANGE_MAX_M" &
-  P_PLOT=$!
+    -p max_scan_range_m:="$RANGE_MAX_M")"
 else
   P_PLOT=""
 fi
@@ -170,7 +199,13 @@ fi
 cleanup() {
   echo
   echo "Stopping background processes..."
-  kill "$P_BRINGUP" "$P_LIDAR" ${P_PLOT:+"$P_PLOT"} 2>/dev/null || true
+  stop_group "$P_BRINGUP"
+  stop_group "$P_LIDAR"
+  stop_group "$P_PLOT"
+  sleep 0.5
+  kill -KILL -- "-$P_BRINGUP" 2>/dev/null || true
+  kill -KILL -- "-$P_LIDAR" 2>/dev/null || true
+  [[ -n "$P_PLOT" ]] && kill -KILL -- "-$P_PLOT" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
